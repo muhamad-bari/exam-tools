@@ -186,27 +186,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
     }
 
     $fullHtmlBody = '';
-    $chunks = array_chunk($students, 2);
-    $totalChunks = count($chunks);
-    
-    foreach ($chunks as $index => $chunk) {
-        $fullHtmlBody .= '<!-- Page Start -->';
-        
-        // Top Card
-        $fullHtmlBody .= renderCard($chunk[0], $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan);
-        
-        // Separator
-        $fullHtmlBody .= '<div class="separator"></div>';
-        
-        // Bottom Card (if exists)
-        if (isset($chunk[1])) {
-            $fullHtmlBody .= renderCard($chunk[1], $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan);
-        }
-
-        // Page Break (if not last page)
-        if ($index < $totalChunks - 1) {
-            $fullHtmlBody .= '<div style="page-break-after: always;"></div>';
-        }
+    foreach ($students as $student) {
+        $fullHtmlBody .= renderCard($student, $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan);
     }
 
     $html = '
@@ -219,15 +200,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
             body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
             
             .card {
-                height: 48%; 
                 position: relative;
-                padding-top: 5px;
+                padding-top: 10px;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+                border-bottom: 1px dashed #999;
+                page-break-inside: avoid;
             }
-            .separator {
-                border-top: 1px dashed #999;
-                margin: 10px 0;
-                height: 0;
+            .card:last-child {
+                border-bottom: none;
+                margin-bottom: 0;
             }
+            /* Remove old separator style */
             
             table.schedule-table {
                 width: 100%;
