@@ -14,14 +14,16 @@ $pdfPath = 'results/QR_' . $fileBaseName . '.pdf';
 // 1. Check if PDF already exists
 if (file_exists($pdfPath)) {
     // Serve the existing PDF
-    servePdf($pdfPath, "QR_" . $fileBaseName . ".pdf");
+    $timestamp = date('dmY_Hi');
+    servePdf($pdfPath, "QR_" . $fileBaseName . "_" . $timestamp . ".pdf");
     exit;
 }
 
 // 2. If not, try to generate it now
 if (file_exists($csvPath)) {
     if (generatePDF($csvPath, $pdfPath)) {
-        servePdf($pdfPath, "QR_" . $fileBaseName . ".pdf");
+        $timestamp = date('dmY_Hi');
+        servePdf($pdfPath, "QR_" . $fileBaseName . "_" . $timestamp . ".pdf");
         exit;
     } else {
         die("Failed to generate PDF from CSV.");
