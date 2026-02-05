@@ -2,6 +2,7 @@
 session_start();
 require "vendor/autoload.php";
 include "phpqrcode/qrlib.php";
+require_once "lib/pdf_helper.php";
 
 $data = [];
 $showSidebar = false;
@@ -42,6 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
             
             if (move_uploaded_file($tmpName, $destPath)) {
                 
+                // Generate PDF immediately
+                $pdfPath = 'results/QR_' . pathinfo($safeName, PATHINFO_FILENAME) . '.pdf';
+                generatePDF($destPath, $pdfPath);
+
                 // Read this specific file
                 if (($handle = fopen($destPath, 'r')) !== FALSE) {
                     // Skip Header
@@ -113,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
+    <?php include "navbar.php"; ?>
     <div id="toast-container"></div>
 
     <div class="container">

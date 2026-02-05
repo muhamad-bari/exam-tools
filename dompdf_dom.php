@@ -100,17 +100,11 @@
                 echo '<tr>';
             }
 
-            // Generate QR Code
-            $tempQrFile = tempnam(sys_get_temp_dir(), 'qr_') . '.png';
-            // Pastikan parameter QRcode benar sesuai library yang dipakai
-            QRcode::png($row["isiqr"], $tempQrFile, QR_ECLEVEL_L, 3, 1); 
-            
-            $base64 = "";
-            if (file_exists($tempQrFile)) {
-                $imageString = file_get_contents($tempQrFile);
-                unlink($tempQrFile);
-                $base64 = base64_encode($imageString);
-            }
+            // Generate QR Code (In-Memory)
+            ob_start();
+            QRcode::png($row["isiqr"], null, QR_ECLEVEL_L, 3, 1); 
+            $imageString = ob_get_clean();
+            $base64 = base64_encode($imageString);
             ?>
             
             <td class="grid-cell">

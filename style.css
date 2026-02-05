@@ -21,9 +21,59 @@ body {
     overflow: hidden; /* Prevent body scroll, handle in containers */
 }
 
+/* Navbar Styles */
+.navbar {
+    background-color: #fff;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    z-index: 100;
+    position: relative;
+}
+
+.navbar-brand {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.navbar-menu {
+    list-style: none;
+    display: flex;
+    gap: 20px;
+}
+
+.navbar-menu li a {
+    text-decoration: none;
+    color: #636e72;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.navbar-menu li a:hover {
+    background-color: #f1f2f6;
+    color: var(--primary-color);
+}
+
+.navbar-menu li a.active {
+    background-color: #e3f2fd;
+    color: var(--primary-color);
+}
+
 .container {
     display: flex;
-    height: 100vh;
+    height: calc(100vh - 60px); /* Adjust height for navbar */
     width: 100%;
 }
 
