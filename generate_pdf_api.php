@@ -46,16 +46,16 @@ try {
     // ====== 1. PROCESS FORM DATA ======
     
     // Header & Title
-    $headerLine1 = !empty($_POST['header_line1']) ? strtoupper(trim($_POST['header_line1'])) : 'AKADEMI KEBIDANAN WIJAYA HUSADA';
-    $headerLine2 = !empty($_POST['header_line2']) ? strtoupper(trim($_POST['header_line2'])) : '';
-    $subTitle = !empty($_POST['sub_title']) ? trim($_POST['sub_title']) : 'JADWAL UJIAN TENGAH SEMESTER (UTS) SEMESTER GENAP T.A 2024 / 2025';
+    $headerLine1 = isset($_POST['header_line1']) ? strtoupper(trim($_POST['header_line1'])) : 'AKADEMI KEBIDANAN WIJAYA HUSADA';
+    $headerLine2 = isset($_POST['header_line2']) ? strtoupper(trim($_POST['header_line2'])) : '';
+    $subTitle = isset($_POST['sub_title']) ? trim($_POST['sub_title']) : 'JADWAL UJIAN TENGAH SEMESTER (UTS) SEMESTER GENAP T.A 2024 / 2025';
     
     // Signer data
     $signer = [
-        'nama' => !empty($_POST['signer_name']) ? trim($_POST['signer_name']) : 'Elpinaria Girsang, S.ST., M.K.M.',
-        'jabatan' => !empty($_POST['signer_title']) ? trim($_POST['signer_title']) : 'Direktur',
-        'institusi' => !empty($_POST['signer_institution']) ? trim($_POST['signer_institution']) : 'Akademi Kebidanan Wijaya Husada',
-        'tanggal' => !empty($_POST['signer_date']) ? trim($_POST['signer_date']) : date('d F Y')
+        'nama' => isset($_POST['signer_name']) ? trim($_POST['signer_name']) : 'Elpinaria Girsang, S.ST., M.K.M.',
+        'jabatan' => isset($_POST['signer_title']) ? trim($_POST['signer_title']) : 'Direktur',
+        'institusi' => isset($_POST['signer_institution']) ? trim($_POST['signer_institution']) : 'Akademi Kebidanan Wijaya Husada',
+        'tanggal' => isset($_POST['signer_date']) ? trim($_POST['signer_date']) : date('d F Y')
     ];
     
     // Process Logo
@@ -67,6 +67,9 @@ try {
             $mime = $finfo->file($logoPath);
             $logoData = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($logoPath));
         }
+    } elseif (!empty($_POST['existing_logo_data'])) {
+        // Use existing base64 logo if no new file uploaded
+        $logoData = $_POST['existing_logo_data'];
     }
     
     // ====== 2. PROCESS SCHEDULE DATA ======
@@ -108,6 +111,14 @@ try {
     
     if (!isset($_FILES['student_csv']) || $_FILES['student_csv']['error'] !== 0) {
         throw new Exception('File CSV tidak diunggah atau ada error');
+    }
+    
+    // Get CSV filename for PDF naming
+    $csvBaseName = 'mahasiswa';
+    if (isset($_FILES['student_csv']['name'])) {
+        $rawName = pathinfo($_FILES['student_csv']['name'], PATHINFO_FILENAME);
+        // Sanitize: replace spaces with _, remove non-alphanumeric chars
+        $csvBaseName = preg_replace('/[^a-zA-Z0-9_-]/', '', str_replace(' ', '_', $rawName));
     }
     
     $csvPath = $_FILES['student_csv']['tmp_name'];
@@ -264,7 +275,7 @@ try {
                 </table>
                 
                 <div style="margin-top: 10px; text-align: center; width: 45%; float: right;">
-                    <p style="margin-bottom: 0; font-size: 9pt;">Jakarta, ' . htmlspecialchars($signer['tanggal']) . '</p>
+                    <p style="margin-bottom: 0; font-size: 9pt;">Bogor, ' . htmlspecialchars($signer['tanggal']) . '</p>
                     <p style="margin-bottom: 40px; font-size: 9pt;">Mengetahui<br>' . htmlspecialchars($signer['institusi']) . '<br>' . htmlspecialchars($signer['jabatan']) . '</p>
                     <p style="font-weight: bold; text-decoration: underline; font-size: 9pt;">' . htmlspecialchars($signer['nama']) . '</p>
                 </div>
@@ -312,7 +323,7 @@ try {
         'success' => true,
         'message' => 'PDF berhasil dibuat dengan ' . $studentCount . ' halaman',
         'pdf_data' => base64_encode($pdfContent),
-        'filename' => 'Jadwal_Ujian_' . date('YmdHis') . '.pdf'
+        'filename' => 'Jadwal_Ujian_' . $csvBaseName . '_' . date('YmdHis') . '.pdf'
     ]);
     
     exit(0);
