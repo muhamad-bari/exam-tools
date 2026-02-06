@@ -1,250 +1,11 @@
 <?php
 session_start();
-require "vendor/autoload.php";
-use Dompdf\Dompdf;
-use Dompdf\Options;
+// Increase limits for bulk generation
+ini_set('memory_limit', '512M');
+set_time_limit(300);
 
-// Handle PDF Generation
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
-    
-    // 1. Process Logo
-    $logoData = null;
-    if (isset($_FILES['logo']) && $_FILES['logo']['error'] === 0) {
-        $path = $_FILES['logo']['tmp_name'];
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = $finfo->file($path);
-        $logoData = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
-    }
-
-    // 2. Process Header & Signer Data
-    $headerLine1 = strtoupper($_POST['header_line1'] ?? 'AKADEMI KEBIDANAN WIJAYA HUSADA');
-    $headerLine2 = strtoupper($_POST['header_line2'] ?? '');
-    $subTitle    = $_POST['sub_title'] ?? 'JADWAL UJIAN TENGAH SEMESTER (UTS) SEMESTER GENAP T.A 2024 / 2025';
-    
-    $penandaTangan = [
-        'nama'      => $_POST['signer_name'] ?? 'Elpinaria Girsang, S.ST., M.K.M.',
-        'jabatan'   => $_POST['signer_title'] ?? 'Direktur',
-        'institusi' => $_POST['signer_institution'] ?? 'Akademi Kebidanan Wijaya Husada',
-        'tanggal'   => $_POST['signer_date'] ?? date('d F Y')
-    ];
-
-    // 3. Process Schedule Data
-    $jadwal = [];
-    if (isset($_POST['matkul']) && is_array($_POST['matkul'])) {
-        $count = count($_POST['matkul']);
-        for ($i = 0; $i < $count; $i++) {
-            $jadwal[] = [
-                'hari'   => $_POST['hari'][$i] ?? '',
-                'matkul' => $_POST['matkul'][$i] ?? '',
-                'jam'    => $_POST['jam'][$i] ?? '',
-                'ruang'  => $_POST['ruang'][$i] ?? ''
-            ];
-        }
-    }
-
-    // 4. Process CSV Data (Bulk Students)
-    $students = [];
-    if (isset($_FILES['student_csv']) && $_FILES['student_csv']['error'] === 0) {
-        if (($handle = fopen($_FILES['student_csv']['tmp_name'], "r")) !== FALSE) {
-            // Check for header row logic if needed, but assuming standard format or simple check
-            // Row Format Assumption: No (0), NIM (1), Nama (2), Kelas (3) - based on index.php logic
-            // Or Smart Detection similar to index.php
-            
-            // Skip first line if it looks like header
-            $firstRow = fgetcsv($handle, 10000, ",");
-            if ($firstRow) {
-                 // Simple smart detection from index.php
-                 $nimIdx = 1; $nameIdx = 2; $classIdx = 3;
-                 
-                 // Reuse first row if it's data
-                 if (is_numeric(str_replace([' ', '-'], '', $firstRow[1]))) {
-                    $students[] = (object)[
-                        'nim' => $firstRow[1],
-                        'nama' => $firstRow[2],
-                        'tingkat' => $firstRow[3] ?? '-'
-                    ];
-                 }
-            }
-
-            while (($row = fgetcsv($handle, 10000, ",")) !== FALSE) {
-                if (count($row) < 3) continue;
-                
-                // Logic from index.php
-                $nim = ""; $nama = ""; $kelas = "-";
-                if (is_numeric(str_replace([' ', '-'], '', $row[1]))) {
-                    $nim = $row[1];
-                    $nama = $row[2];
-                    if (isset($row[3])) $kelas = $row[3];
-                } else {
-                    $nama = $row[1];
-                    $nim = $row[2];
-                    if (isset($row[3])) $kelas = $row[3];
-                }
-                
-                if (empty($nama) || empty($nim)) continue;
-
-                $students[] = (object)[
-                    'nama' => $nama,
-                    'nim' => $nim,
-                    'tingkat' => $kelas
-                ];
-            }
-            fclose($handle);
-        }
-    } else {
-        // Fallback or Error if no CSV? 
-        // Or maybe just generate 1 demo page if no CSV?
-        // Let's add at least one dummy if empty so user sees something
-        $students[] = (object)['nama' => 'CONTOH MAHASISWA', 'nim' => '12345678', 'tingkat' => 'I'];
-    }
-
-    require_once "phpqrcode/qrlib.php"; // Include library
-
-    // ... (rest of code)
-    
-    // 5. Generate PDF HTML
-    // Helper function to render a single card
-    function renderCard($student, $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan) {
-        // Logo HTML
-        $imgHtml = '';
-        if ($logoData) {
-            // Fixed position and size (Max width 70px, Max height 70px to fit corner)
-            $imgHtml = '<img src="' . $logoData . '" style="width: auto; max-width: 70px; max-height: 70px; position: absolute; left: 30px; top: 10px;">';
-        }
-
-        // Generate QR Code
-        $qrContent = $student->nama . '_' . $student->tingkat . '_' . $student->nim;
-        $qrTempFile = tempnam(sys_get_temp_dir(), 'qr') . '.png';
-        QRcode::png($qrContent, $qrTempFile, QR_ECLEVEL_L, 3, 2);
-        $qrData = 'data:image/png;base64,' . base64_encode(file_get_contents($qrTempFile));
-        unlink($qrTempFile); // Clean up
-
-        $html = '
-        <div class="card">
-            ' . $imgHtml . '
-            <!-- Header with Padding to avoid Logo Overlap -->
-            <div class="header" style="text-align: center; margin-bottom: 15px; padding: 0 40px 0 110px;">
-                <h3 style="margin: 0; font-size: 11pt;">' . htmlspecialchars($headerLine1) . '</h3>
-                ' . ($headerLine2 ? '<h3 style="margin: 0; font-size: 11pt;">' . htmlspecialchars($headerLine2) . '</h3>' : '') . '
-                <h4 style="margin: 5px 0 0 0; font-weight: normal; font-size: 10pt;">' . htmlspecialchars($subTitle) . '</h4>
-            </div>
-
-            <div class="student-info" style="margin-bottom: 5px; font-weight: bold; font-size: 9pt;">
-                <table style="width: 100%; border: none;">
-                    <tr>
-                        <td style="vertical-align: top;">
-                            <table style="width: 100%; border: none;">
-                                <tr><td style="width: 70px;">KELAS</td><td>: ' . htmlspecialchars($student->tingkat) . '</td></tr>
-                                <tr><td>NAMA</td><td>: ' . htmlspecialchars($student->nama) . '</td></tr>
-                                <tr><td>NIM</td><td>: ' . htmlspecialchars($student->nim) . '</td></tr>
-                            </table>
-                        </td>
-                        <td style="width: 80px; text-align: right; vertical-align: top;">
-                            <img src="' . $qrData . '" style="width: 70px; height: 70px; border: 1px solid #eee;">
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <table class="schedule-table">
-                <thead>
-                    <tr>
-                        <th style="width: 5%;">No</th>
-                        <th style="width: 35%;">Mata Kuliah</th>
-                        <th style="width: 25%;">Hari/Tanggal</th>
-                        <th style="width: 15%;">Jam</th>
-                        <th style="width: 10%;">Ruang</th>
-                        <th style="width: 10%;">TTD</th>
-                    </tr>
-                </thead>
-                <tbody>';
-                
-                $no = 1;
-                foreach ($jadwal as $row) {
-                    $html .= '<tr>
-                        <td style="text-align: center;">'.$no++.'</td>
-                        <td>'.htmlspecialchars($row['matkul']).'</td>
-                        <td style="text-align: center;">'.htmlspecialchars($row['hari']).'</td>
-                        <td style="text-align: center;">'.htmlspecialchars($row['jam']).'</td>
-                        <td style="text-align: center;">'.htmlspecialchars($row['ruang']).'</td>
-                        <td></td>
-                    </tr>';
-                }
-
-        $html .= '
-                </tbody>
-            </table>
-
-            <div class="footer" style="margin-top: 10px; text-align: center; float: right; width: 45%;">
-                <p style="margin-bottom: 0; font-size: 9pt;">Jakarta, ' . htmlspecialchars($penandaTangan['tanggal']) . '</p>
-                <p style="margin-bottom: 40px; font-size: 9pt;">Mengetahui<br>' . htmlspecialchars($penandaTangan['institusi']) . '<br>' . htmlspecialchars($penandaTangan['jabatan']) . '</p>
-                <p style="font-weight: bold; text-decoration: underline; font-size: 9pt;">' . htmlspecialchars($penandaTangan['nama']) . '</p>
-            </div>
-            <div style="clear: both;"></div>
-        </div>';
-        return $html;
-    }
-
-    $fullHtmlBody = '';
-    foreach ($students as $student) {
-        $fullHtmlBody .= renderCard($student, $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan);
-    }
-
-    $html = '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Kartu Jadwal Ujian</title>
-        <style>
-            @page { margin: 1cm 1.5cm; size: A4 portrait; }
-            body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
-            
-            .card {
-                position: relative;
-                padding-top: 10px;
-                padding-bottom: 20px;
-                margin-bottom: 20px;
-                border-bottom: 1px dashed #999;
-                page-break-inside: avoid;
-            }
-            .card:last-child {
-                border-bottom: none;
-                margin-bottom: 0;
-            }
-            /* Remove old separator style */
-            
-            table.schedule-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 5px;
-            }
-            table.schedule-table th, table.schedule-table td {
-                border: 1px solid black;
-                padding: 3px 4px; /* Tighter padding */
-                font-size: 9pt;
-                vertical-align: middle;
-            }
-            table.schedule-table th {
-                background-color: #eee;
-                text-align: center;
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        ' . $fullHtmlBody . '
-    </body>
-    </html>';
-
-    $options = new Options();
-    $options->set('isRemoteEnabled', true);
-    $dompdf = new Dompdf($options);
-    $dompdf->loadHtml($html);
-    $dompdf->setPaper('A4', 'portrait');
-    $dompdf->render();
-    $dompdf->stream("Jadwal_Ujian_Bulk.pdf", ['Attachment' => 0]);
-    exit;
-}
+// Note: PDF Generation dipindahkan ke api_generate_jadwal.php
+// File ini hanya menampilkan form HTML
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -329,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
     <div class="split-container">
         <!-- LEFT PANEL: SETTINGS FORM -->
         <div class="left-panel">
-            <form action="jadwal.php" method="post" enctype="multipart/form-data" target="_blank" id="scheduleForm">
+            <form action="api_generate_jadwal.php" method="post" enctype="multipart/form-data" id="scheduleForm">
                 <input type="hidden" name="generate_pdf" value="true">
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -358,6 +119,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                             <p style="margin: 0; font-size: 0.9rem; color: #636e72;">Drag Image here or <span style="color: #3498db; font-weight: 600;">Browse</span></p>
                             <p id="logoFileName" style="margin: 5px 0 0 0; font-size: 0.8rem; color: #27ae60; font-weight: bold; display: none;"></p>
                             <input type="file" name="logo" id="logo" accept="image/*" class="form-control" style="display: none;" onchange="handleLogoSelect(this)">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 5px; gap: 5px;">
+                            <button type="button" id="deleteLogoBtn" style="display: none; font-size: 0.8rem; padding: 4px 8px; border-radius: 4px; background-color: #e74c3c; color: white; border: none; cursor: pointer; transition: background 0.3s;" onclick="deleteLogoFile()">
+                                <i class="fa-solid fa-trash"></i> Hapus Logo
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -394,7 +160,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                             <p id="csvFileName" style="margin: 5px 0 0 0; font-size: 0.8rem; color: #27ae60; font-weight: bold; display: none;"></p>
                             <input type="file" name="student_csv" id="student_csv" accept=".csv" class="form-control" style="display: none;" required onchange="handleCsvSelect(this)">
                         </div>
-                        <div style="display: flex; justify-content: flex-end; align-items: top; margin-top: 5px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; gap: 5px;">
+                            <button type="button" id="deleteCsvBtn" style="display: none; font-size: 0.8rem; padding: 4px 8px; border-radius: 4px; background-color: #e74c3c; color: white; border: none; cursor: pointer; transition: background 0.3s;" onclick="deleteCsvFile()">
+                                <i class="fa-solid fa-trash"></i> Hapus CSV
+                            </button>
                             <a href="format_mahasiswa.csv" download class="btn-download" style="font-size: 0.8rem; text-decoration: none; color: white !important; padding: 4px 8px; border-radius: 4px; background-color: #3498db;">
                                 <i class="fa-solid fa-download"></i> Download Template
                             </a>
@@ -422,8 +191,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                 </div>
 
                 <div style="margin-top: 20px; margin-bottom: 20px;">
-                    <button type="submit" class="btn-submit" style="width: 100%; padding: 12px; font-size: 1.1rem; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; transition: background 0.3s;">
-                        <i class="fa-solid fa-file-pdf"></i> Generate PDF
+                    <button type="button" id="generatePdfBtn" class="btn-submit" style="width: 100%; padding: 12px; font-size: 1.1rem; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; transition: background 0.3s;" onclick="generatePDF()">
+                        <i class="fa-solid fa-file-pdf"></i> <span id="btnText">Generate PDF</span>
                     </button>
                 </div>
             </form>
@@ -594,6 +363,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                 const display = document.getElementById('csvFileName');
                 display.style.display = 'block';
                 display.innerHTML = '<i class="fa-solid fa-file-csv"></i> ' + name;
+                // Show delete button
+                document.getElementById('deleteCsvBtn').style.display = 'inline-block';
             }
         }
 
@@ -628,6 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                     input.value = ""; // Clear input
                     document.getElementById('logoFileName').style.display = 'none';
                     document.getElementById('previewLogoImg').style.display = 'none';
+                    document.getElementById('deleteLogoBtn').style.display = 'none';
                     return;
                 }
 
@@ -635,6 +407,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                 const display = document.getElementById('logoFileName');
                 display.style.display = 'block';
                 display.innerHTML = '<i class="fa-solid fa-image"></i> ' + name;
+                // Show delete button
+                document.getElementById('deleteLogoBtn').style.display = 'inline-block';
                 previewLogo(input);
             }
         }
@@ -652,6 +426,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                 }
                 reader.readAsDataURL(input.files[0]);
             }
+        }
+
+        // Delete Logo File Handler
+        function deleteLogoFile() {
+            const logoInput = document.getElementById('logo');
+            const logoFileName = document.getElementById('logoFileName');
+            const deleteLogoBtn = document.getElementById('deleteLogoBtn');
+            const previewLogoImg = document.getElementById('previewLogoImg');
+            
+            // Clear file input
+            logoInput.value = '';
+            
+            // Hide file name display
+            logoFileName.style.display = 'none';
+            logoFileName.innerHTML = '';
+            
+            // Hide delete button
+            deleteLogoBtn.style.display = 'none';
+            
+            // Hide preview image
+            if (previewLogoImg) {
+                previewLogoImg.style.display = 'none';
+                previewLogoImg.src = '';
+            }
+            
+            showToast('Logo berhasil dihapus', 'success');
+        }
+
+        // Delete CSV File Handler
+        function deleteCsvFile() {
+            const csvInput = document.getElementById('student_csv');
+            const csvFileName = document.getElementById('csvFileName');
+            const deleteCsvBtn = document.getElementById('deleteCsvBtn');
+            
+            // Clear file input
+            csvInput.value = '';
+            
+            // Hide file name display
+            csvFileName.style.display = 'none';
+            csvFileName.innerHTML = '';
+            
+            // Hide delete button
+            deleteCsvBtn.style.display = 'none';
+            
+            showToast('File CSV berhasil dihapus', 'success');
         }
 
         function updatePreview() {
@@ -687,6 +506,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_pdf'])) {
                 `;
                 tbody.appendChild(tr);
             }
+        }
+
+        // AJAX Form Submission Handler
+        function generatePDF() {
+            const form = document.getElementById('scheduleForm');
+            const formData = new FormData(form);
+            const btn = document.getElementById('generatePdfBtn');
+            const btnText = document.getElementById('btnText');
+            
+            // Disable button and show loading state
+            btn.disabled = true;
+            const originalText = btnText.innerHTML;
+            btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+            
+            fetch('generate_pdf_api.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                // Check if response is OK
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+                
+                // Check content type
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Response bukan JSON. Kemungkinan ada error di server.');
+                }
+                
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.success) {
+                    // Decode base64 PDF and trigger download
+                    const binaryString = atob(data.pdf_data);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    
+                    const blob = new Blob([bytes], { type: 'application/pdf' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showToast(data.message, 'success');
+                } else if (data && !data.success) {
+                    showToast(data.message || 'Gagal membuat PDF', 'error');
+                } else {
+                    throw new Error('Response tidak valid');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error: ' + error.message + ' - Cek browser console untuk details', 'error');
+            })
+            .finally(() => {
+                // Re-enable button
+                btn.disabled = false;
+                btnText.innerHTML = originalText;
+            });
         }
 
         // Init
