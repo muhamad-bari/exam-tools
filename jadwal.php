@@ -141,9 +141,10 @@ set_time_limit(300);
                     <div class="form-group">
                         <label class="form-label">Upload Logo</label>
                         <div class="upload-area" id="logoDropZone" style="padding: 1.5rem; border: 2px dashed #dfe6e9; border-radius: 6px; text-align: center; cursor: pointer; transition: all 0.3s; background: #fafbfc;">
-                            <i class="fa-solid fa-image" style="font-size: 2rem; color: #a4b0be; margin-bottom: 0.5rem;"></i>
-                            <p style="margin: 0; font-size: 0.9rem; color: #636e72;">Drag Image here or <span style="color: #3498db; font-weight: 600;">Browse</span></p>
+                            <i class="fa-solid fa-image" style="font-size: 2rem; color: #a4b0be; margin-bottom: 0.5rem;" id="logoIcon"></i>
+                            <p style="margin: 0; font-size: 0.9rem; color: #636e72;" id="logoText">Drag Image here or <span style="color: #3498db; font-weight: 600;">Browse</span></p>
                             <p id="logoFileName" style="margin: 5px 0 0 0; font-size: 0.8rem; color: #27ae60; font-weight: bold; display: none;"></p>
+                            <p id="logoLoadingSpinner" style="margin: 10px 0 0 0; font-size: 0.8rem; color: #3498db; display: none;"><i class="fa-solid fa-spinner fa-spin"></i> Processing image...</p>
                             <input type="file" name="logo" id="logo" accept="image/*" class="form-control" style="display: none;" onchange="handleLogoSelect(this)">
                         </div>
                         <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 5px; gap: 5px;">
@@ -180,10 +181,14 @@ set_time_limit(300);
                     <h3>3. Data Mahasiswa (CSV)</h3>
                     <div class="form-group">
                         <label class="form-label">Upload File CSV</label>
+                        <p style="font-size: 0.75rem; color: #7f8c8d; margin-bottom: 8px; font-style: italic;">
+                            Format: <strong>No, Nama, NIM, Kelas</strong> (sama dengan format QR generator)
+                        </p>
                         <div class="upload-area" id="csvDropZone" style="padding: 1.5rem; border: 2px dashed #dfe6e9; border-radius: 6px; text-align: center; cursor: pointer; transition: all 0.3s; background: #fafbfc;">
-                            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: #a4b0be; margin-bottom: 0.5rem;"></i>
-                            <p style="margin: 0; font-size: 0.9rem; color: #636e72;">Drag CSV here or <span style="color: #3498db; font-weight: 600;">Browse</span></p>
+                            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: #a4b0be; margin-bottom: 0.5rem;" id="csvIcon"></i>
+                            <p style="margin: 0; font-size: 0.9rem; color: #636e72;" id="csvText">Drag CSV here or <span style="color: #3498db; font-weight: 600;">Browse</span></p>
                             <p id="csvFileName" style="margin: 5px 0 0 0; font-size: 0.8rem; color: #27ae60; font-weight: bold; display: none;"></p>
+                            <p id="csvLoadingSpinner" style="margin: 10px 0 0 0; font-size: 0.8rem; color: #3498db; display: none;"><i class="fa-solid fa-spinner fa-spin"></i> Validating file...</p>
                             <input type="file" name="student_csv" id="student_csv" accept=".csv" class="form-control" style="display: none;" onchange="handleCsvSelect(this)">
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; gap: 5px;">
@@ -395,19 +400,64 @@ set_time_limit(300);
             const files = dt.files;
             
             if (files.length > 0) {
-                input.files = files;
-                callback(input);
+                try {
+                    const dataTransfer = new DataTransfer();
+                    for (const file of files) {
+                        dataTransfer.items.add(file);
+                    }
+                    input.files = dataTransfer.files;
+                } catch (err) {
+                    // Fallback: some browsers disallow setting input.files
+                }
+                callback(input, files);
             }
         }
 
-        function handleCsvSelect(input) {
-            if (input.files && input.files[0]) {
-                const name = input.files[0].name;
-                const display = document.getElementById('csvFileName');
-                display.style.display = 'block';
-                display.innerHTML = '<i class="fa-solid fa-file-csv"></i> ' + name;
-                // Show delete button
-                document.getElementById('deleteCsvBtn').style.display = 'inline-block';
+        function handleCsvSelect(input, overrideFiles = null) {
+            const files = overrideFiles || input.files;
+            if (files && files[0]) {
+                const file = files[0];
+                const fileName = file.name;
+                const fileSize = file.size;
+
+                // Validate file extension
+                if (!fileName.toLowerCase().endsWith('.csv')) {
+                    showToast('Hanya format CSV yang diperbolehkan!', 'error');
+                    input.value = '';
+                    document.getElementById('csvFileName').style.display = 'none';
+                    document.getElementById('csvLoadingSpinner').style.display = 'none';
+                    document.getElementById('deleteCsvBtn').style.display = 'none';
+                    return;
+                }
+
+                // Validate file size (max 10MB)
+                if (fileSize > 10 * 1024 * 1024) {
+                    showToast('Ukuran file terlalu besar (max 10MB)', 'error');
+                    input.value = '';
+                    document.getElementById('csvFileName').style.display = 'none';
+                    document.getElementById('csvLoadingSpinner').style.display = 'none';
+                    document.getElementById('deleteCsvBtn').style.display = 'none';
+                    return;
+                }
+
+                // Show loading
+                document.getElementById('csvLoadingSpinner').style.display = 'block';
+                document.getElementById('csvIcon').style.display = 'none';
+                document.getElementById('csvText').style.display = 'none';
+
+                // Simulate validation delay
+                setTimeout(() => {
+                    document.getElementById('csvLoadingSpinner').style.display = 'none';
+                    document.getElementById('csvIcon').style.display = 'block';
+                    document.getElementById('csvText').style.display = 'block';
+                    
+                    const display = document.getElementById('csvFileName');
+                    display.style.display = 'block';
+                    display.innerHTML = `<i class="fa-solid fa-file-csv"></i> ${fileName} (${(fileSize / 1024).toFixed(2)} KB)`;
+                    
+                    document.getElementById('deleteCsvBtn').style.display = 'inline-block';
+                    showToast('File CSV berhasil dimuat!', 'success');
+                }, 500);
             }
         }
 
@@ -432,47 +482,72 @@ set_time_limit(300);
             });
         }
 
-        function handleLogoSelect(input) {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
+        function handleLogoSelect(input, overrideFiles = null) {
+            const files = overrideFiles || input.files;
+            if (files && files[0]) {
+                const file = files[0];
                 const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+                const fileName = file.name;
                 
                 if (!validTypes.includes(file.type)) {
                     showToast('Hanya format JPG, JPEG, dan PNG yang diperbolehkan!', 'error');
-                    input.value = ""; // Clear input
+                    input.value = '';
                     document.getElementById('logoFileName').style.display = 'none';
+                    document.getElementById('logoLoadingSpinner').style.display = 'none';
                     document.getElementById('previewLogoImg').style.display = 'none';
                     document.getElementById('deleteLogoBtn').style.display = 'none';
                     return;
                 }
 
-                const name = file.name;
-                const display = document.getElementById('logoFileName');
-                display.style.display = 'block';
-                display.innerHTML = '<i class="fa-solid fa-image"></i> ' + name;
-                // Show delete button
-                document.getElementById('deleteLogoBtn').style.display = 'inline-block';
-                previewLogo(input);
-            }
-        }
-        
-        // Remove old specific logo/csv listeners since we genericized them above or replaced them
-        
-        // Keep previewLogo for the actual preview rendering logic
-        function previewLogo(input) {
-            if (input.files && input.files[0]) {
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = document.getElementById('previewLogoImg');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    // Update hidden input for session saving
-                    document.getElementById('existing_logo_data').value = e.target.result;
+                // Validate file size (max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast('Ukuran logo terlalu besar (max 5MB)', 'error');
+                    input.value = '';
+                    document.getElementById('logoFileName').style.display = 'none';
+                    document.getElementById('logoLoadingSpinner').style.display = 'none';
+                    document.getElementById('previewLogoImg').style.display = 'none';
+                    document.getElementById('deleteLogoBtn').style.display = 'none';
+                    return;
                 }
-                reader.readAsDataURL(input.files[0]);
+
+                // Show loading spinner
+                document.getElementById('logoLoadingSpinner').style.display = 'block';
+                document.getElementById('logoIcon').style.display = 'none';
+                document.getElementById('logoText').style.display = 'none';
+
+                // Process logo with delay for visual feedback
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    setTimeout(() => {
+                        // Hide loading
+                        document.getElementById('logoLoadingSpinner').style.display = 'none';
+                        document.getElementById('logoIcon').style.display = 'block';
+                        document.getElementById('logoText').style.display = 'block';
+                        
+                        const img = document.getElementById('previewLogoImg');
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                        document.getElementById('existing_logo_data').value = e.target.result;
+                        
+                        const display = document.getElementById('logoFileName');
+                        display.style.display = 'block';
+                        display.innerHTML = `<i class="fa-solid fa-image"></i> ${fileName}`;
+                        document.getElementById('deleteLogoBtn').style.display = 'inline-block';
+                        
+                        showToast('Logo berhasil dimuat!', 'success');
+                    }, 500);
+                };
+                reader.onerror = function() {
+                    showToast('Gagal membaca file logo!', 'error');
+                    document.getElementById('logoLoadingSpinner').style.display = 'none';
+                    document.getElementById('logoIcon').style.display = 'block';
+                    document.getElementById('logoText').style.display = 'block';
+                    input.value = '';
+                };
+                reader.readAsDataURL(file);
             }
         }
-
+        
         // Delete Logo File Handler
         function deleteLogoFile() {
             const logoInput = document.getElementById('logo');
@@ -782,9 +857,9 @@ set_time_limit(300);
             list.innerHTML = '';
 
             // Allow dropping on the main container (Root)
-            list.ondragover = handleDragOver;
-            list.ondragleave = handleDragLeave;
-            list.ondrop = (e) => handleDrop(e, null);
+            list.ondragover = handleFolderDragOver;
+            list.ondragleave = handleFolderDragLeave;
+            list.ondrop = (e) => handleFolderDrop(e, null);
 
             const isFiltering = !!filteredSessions;
             const sessionsToRender = isFiltering ? filteredSessions : allSessions;
@@ -796,14 +871,18 @@ set_time_limit(300);
 
             const foldersByParent = {};
             allFolders.forEach(f => {
-                const key = f.parent_id == null ? 'root' : String(f.parent_id);
+                // Normalize parent_id: treat null, undefined, 0, "0", "" as root
+                const parentId = (f.parent_id === null || f.parent_id === undefined || f.parent_id === 0 || f.parent_id === "0" || f.parent_id === "") ? null : f.parent_id;
+                const key = parentId === null ? 'root' : String(parentId);
                 if (!foldersByParent[key]) foldersByParent[key] = [];
                 foldersByParent[key].push(f);
             });
 
             const sessionsByFolder = {};
             sessionsToRender.forEach(s => {
-                const key = s.folder_id == null ? 'root' : String(s.folder_id);
+                // Normalize folder_id: treat null, undefined, 0, "0", "" as root
+                const folderId = (s.folder_id === null || s.folder_id === undefined || s.folder_id === 0 || s.folder_id === "0" || s.folder_id === "") ? null : s.folder_id;
+                const key = folderId === null ? 'root' : String(folderId);
                 if (!sessionsByFolder[key]) sessionsByFolder[key] = [];
                 sessionsByFolder[key].push(s);
             });
@@ -853,10 +932,10 @@ set_time_limit(300);
             folderDiv.setAttribute('data-type', 'folder');
             
             // Drag Events
-            folderDiv.ondragstart = handleDragStart;
-            folderDiv.ondragover = (e) => { e.stopPropagation(); handleDragOver(e); }; // Stop propagation to allow nested drops
-            folderDiv.ondragleave = handleDragLeave;
-            folderDiv.ondrop = (e) => { e.stopPropagation(); handleDrop(e, f.id); };
+            folderDiv.ondragstart = handleFolderDragStart;
+            folderDiv.ondragover = handleFolderDragOver;
+            folderDiv.ondragleave = handleFolderDragLeave;
+            folderDiv.ondrop = (e) => handleFolderDrop(e, f.id);
 
             // Header
             const header = document.createElement('div');
@@ -918,8 +997,8 @@ set_time_limit(300);
             div.setAttribute('draggable', 'true');
             div.setAttribute('data-id', s.id);
             div.setAttribute('data-type', 'session');
-            div.ondragstart = handleDragStart;
-            div.ondragend = handleDragEnd;
+            div.ondragstart = handleFolderDragStart;
+            div.ondragend = handleFolderDragEnd;
 
             div.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 5px; font-size: 0.9rem; margin-left: 10px; cursor: grab; ${activeStyle}`;
             div.innerHTML = `
@@ -939,20 +1018,23 @@ set_time_limit(300);
             return div;
         }
 
-        // --- DRAG AND DROP HANDLERS ---
+        // --- DRAG AND DROP HANDLERS FOR FOLDER/SESSION MANAGEMENT ---
 
-        function handleDragStart(e) {
-            e.dataTransfer.setData('type', e.target.getAttribute('data-type'));
-            e.dataTransfer.setData('id', e.target.getAttribute('data-id'));
-            e.target.style.opacity = '0.4';
+        function handleFolderDragStart(e) {
+            e.stopPropagation(); // Prevent parent folders from being dragged
+            const item = e.currentTarget; // Use currentTarget to get the draggable element, not clicked child
+            e.dataTransfer.setData('type', item.getAttribute('data-type'));
+            e.dataTransfer.setData('id', item.getAttribute('data-id'));
+            item.style.opacity = '0.4';
         }
 
-        function handleDragEnd(e) {
-            e.target.style.opacity = '1';
+        function handleFolderDragEnd(e) {
+            e.currentTarget.style.opacity = '1';
         }
 
-        function handleDragOver(e) {
+        function handleFolderDragOver(e) {
             e.preventDefault();
+            e.stopPropagation(); // Prevent parent handlers from triggering
             // Add visual cue
             const target = e.currentTarget.classList.contains('folder-item') 
                 ? e.currentTarget.querySelector('.folder-header') 
@@ -961,7 +1043,8 @@ set_time_limit(300);
             if(target) target.style.border = '2px dashed #3498db';
         }
 
-        function handleDragLeave(e) {
+        function handleFolderDragLeave(e) {
+            e.stopPropagation(); // Prevent parent handlers from triggering
             const target = e.currentTarget.classList.contains('folder-item') 
                 ? e.currentTarget.querySelector('.folder-header') 
                 : e.currentTarget;
@@ -970,8 +1053,9 @@ set_time_limit(300);
             if(e.currentTarget.id === 'sessionList') e.currentTarget.style.border = '1px solid #eee'; // Reset root style
         }
 
-        function handleDrop(e, targetFolderId) {
+        function handleFolderDrop(e, targetFolderId) {
             e.preventDefault();
+            e.stopPropagation(); // Prevent parent handlers from triggering
             
             // Reset styles
             const target = e.currentTarget.classList.contains('folder-item') 
@@ -989,13 +1073,16 @@ set_time_limit(300);
 
             if (!id || !type) return;
 
+            // Convert targetFolderId to proper value (null for root, or number for folder)
+            const finalTargetId = targetFolderId === null ? null : targetFolderId;
+
             fetch('api_sessions.php?action=move_item', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     type: type, 
-                    id: id, 
-                    target_id: targetFolderId 
+                    id: parseInt(id), 
+                    target_id: finalTargetId 
                 })
             })
             .then(r => r.json())
@@ -1114,7 +1201,7 @@ set_time_limit(300);
             .then(res => {
                 if (res.success) {
                     showToast('Session saved!', 'success');
-                    document.getElementById('sessionNameInput').value = '';
+                    // Keep session name in input for subsequent saves
                     fetchSessions();
                 } else {
                     showToast('Error saving: ' + res.message, 'error');

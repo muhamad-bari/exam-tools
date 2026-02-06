@@ -54,22 +54,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                     
                     $fileHasData = false;
                     while (($row = fgetcsv($handle, 10000, ",")) !== FALSE) {
-                        $nim = ""; $nama = ""; $kelas = "-";
-
-                        // Smart detection logic
-                        if (count($row) >= 3) {
-                             if (is_numeric(str_replace([' ', '-'], '', $row[1]))) {
-                                $nim = $row[1];
-                                $nama = $row[2];
-                                if (isset($row[3])) $kelas = $row[3];
-                             } else {
-                                $nama = $row[1];
-                                $nim = $row[2];
-                                if (isset($row[3])) $kelas = $row[3];
-                             }
-                        } else {
+                        // Skip incomplete rows
+                        if (count($row) < 4) {
                             continue;
                         }
+
+                        // Standard format: No (0), Nama (1), NIM (2), Kelas (3)
+                        $nama = trim($row[1] ?? '');
+                        $nim = trim($row[2] ?? '');
+                        $kelas = trim($row[3] ?? '-');
 
                         if (empty($nama) || empty($nim)) continue;
 
@@ -127,6 +120,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
             <div class="upload-card">
                 <h1><i class="fa-solid fa-qrcode"></i> QR Generator</h1>
                 <p style="margin-bottom: 20px; color: #636e72;">Drag & drop multiple CSV files here to merge and generate.</p>
+                <p style="margin-bottom: 15px; font-size: 0.85rem; color: #7f8c8d; padding: 10px; background: #ecf0f1; border-radius: 4px;">
+                    <strong>Format CSV:</strong> No, Nama, NIM, Kelas (sama dengan jadwal generator)
+                </p>
                 
                 <form action="index.php" method="post" enctype="multipart/form-data" id="uploadForm">
                     <div class="upload-area" id="dropZone">

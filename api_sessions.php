@@ -52,10 +52,26 @@ try {
         // Fetch all folders
         $foldersStmt = $db->query("SELECT * FROM folders ORDER BY name ASC");
         $folders = $foldersStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Normalize parent_id to null for root folders
+        foreach ($folders as &$folder) {
+            if ($folder['parent_id'] === '' || $folder['parent_id'] === 0 || $folder['parent_id'] === '0') {
+                $folder['parent_id'] = null;
+            }
+        }
+        unset($folder); // Break reference
 
         // Fetch all sessions
         $stmt = $db->query("SELECT id, name, created_at, folder_id FROM sessions ORDER BY created_at DESC");
         $sessions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Normalize folder_id to null for root sessions
+        foreach ($sessions as &$session) {
+            if ($session['folder_id'] === '' || $session['folder_id'] === 0 || $session['folder_id'] === '0') {
+                $session['folder_id'] = null;
+            }
+        }
+        unset($session); // Break reference
         
         echo json_encode(['success' => true, 'data' => $sessions, 'folders' => $folders]);
     }
@@ -82,36 +98,42 @@ try {
         }
         $input = json_decode(file_get_contents('php://input'), true);
         $type = $input['type'] ?? '';
-        $id = $input['id'] ?? 0;
+        $id = isset($input['id']) ? intval($input['id']) : 0;
         $targetId = $input['target_id'] ?? null; // Null means root
         
-        if ($targetId == 'root' || $targetId == 0) $targetId = null;
+        // Normalize target ID
+        if ($targetId === 'root' || $targetId === 0 || $targetId === '0' || $targetId === '') {
+            $targetId = null;
+        } else {
+            $targetId = intval($targetId);
+        }
 
         if ($type === 'session') {
             $stmt = $db->prepare("UPDATE sessions SET folder_id = :target WHERE id = :id");
-            $stmt->bindParam(':target', $targetId);
-            $stmt->bindParam(':id', $id);
+            $stmt->bindParam(':target', $targetId, $targetId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
             $stmt->execute();
         } 
         elseif ($type === 'folder') {
-            if ($id == $targetId) throw new Exception('Cannot move folder into itself');
+            // Strict comparison after normalization
+            if ($id === $targetId) throw new Exception('Cannot move folder into itself');
             
             // Circular check: ensure target is not a descendant of id
-            if ($targetId) {
+            if ($targetId !== null) {
                 $curr = $targetId;
-                while ($curr) {
-                    if ($curr == $id) throw new Exception('Cannot move folder into its own subfolder');
+                while ($curr !== null) {
+                    if ($curr === $id) throw new Exception('Cannot move folder into its own subfolder');
                     $pStmt = $db->prepare("SELECT parent_id FROM folders WHERE id = :id");
-                    $pStmt->bindParam(':id', $curr);
+                    $pStmt->bindParam(':id', $curr, PDO::PARAM_INT);
                     $pStmt->execute();
                     $res = $pStmt->fetch(PDO::FETCH_ASSOC);
-                    $curr = $res ? $res['parent_id'] : null;
+                    $curr = $res && $res['parent_id'] !== null ? intval($res['parent_id']) : null;
                 }
             }
 
             $stmt = $db->prepare("UPDATE folders SET parent_id = :target WHERE id = :id");
-            $stmt->bindParam(':target', $targetId);
-            $stmt->bindParam(':id', $id);
+            $stmt->bindParam(':target', $targetId, $targetId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
             $stmt->execute();
         }
         
@@ -137,15 +159,21 @@ try {
              throw new Exception('Invalid request method');
         }
         $input = json_decode(file_get_contents('php://input'), true);
-        $id = $input['id'] ?? 0;
+        $id = isset($input['id']) ? intval($input['id']) : 0;
         
         // Update sessions in this folder to be in root (folder_id = NULL)
         $updateStmt = $db->prepare("UPDATE sessions SET folder_id = NULL WHERE folder_id = :id");
-        $updateStmt->bindParam(':id', $id);
+        $updateStmt->bindParam(':id', $id, PDO::PARAM_INT);
         $updateStmt->execute();
 
+        // Update subfolders to be in root (parent_id = NULL)
+        $updateFolderStmt = $db->prepare("UPDATE folders SET parent_id = NULL WHERE parent_id = :id");
+        $updateFolderStmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $updateFolderStmt->execute();
+
+        // Delete the folder itself
         $stmt = $db->prepare("DELETE FROM folders WHERE id = :id");
-        $stmt->bindParam(':id', $id);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
         
         echo json_encode(['success' => true, 'message' => 'Folder deleted']);

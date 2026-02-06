@@ -119,37 +119,20 @@ try {
         $lineNumber++;
         
         // Skip completely empty rows
-        if (count($row) < 2 || empty(implode('', $row))) {
+        if (count($row) < 4 || empty(implode('', $row))) {
             continue;
         }
         
         // Trim whitespace
         $row = array_map('trim', $row);
         
-        $nim = "";
-        $nama = "";
-        $kelas = "-";
+        // Standard format: No (0), Nama (1), NIM (2), Kelas (3)
+        $nama = $row[1] ?? '';
+        $nim = $row[2] ?? '';
+        $kelas = $row[3] ?? '-';
         
-        // PHP 8.0 compatible: explicitly check indices
-        $col1 = (isset($row[1]) ? $row[1] : '');
-        $col2 = (isset($row[2]) ? $row[2] : '');
-        $col3 = (isset($row[3]) ? $row[3] : '-');
-        
-        if (empty($col1) || empty($col2)) {
+        if (empty($nama) || empty($nim)) {
             continue;
-        }
-        
-        // Smart detection
-        $cleanNum = preg_replace('/[^0-9]/', '', $col1);
-        
-        if (strlen($cleanNum) >= 6 && is_numeric($cleanNum)) {
-            $nim = $col1;
-            $nama = $col2;
-            $kelas = $col3;
-        } else {
-            $nama = $col1;
-            $nim = $col2;
-            $kelas = $col3;
         }
         
         // Validate
