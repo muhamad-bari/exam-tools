@@ -38,7 +38,7 @@ try {
     if (!file_exists('phpqrcode/qrlib.php')) {
         throw new Exception('Missing phpqrcode/qrlib.php - File library tidak ditemukan');
     }
-    
+
     require_once "phpqrcode/qrlib.php";
 
     // 1. Process Logo
@@ -54,7 +54,7 @@ try {
     $headerLine1 = strtoupper($_POST['header_line1'] ?? 'AKADEMI KEBIDANAN WIJAYA HUSADA');
     $headerLine2 = strtoupper($_POST['header_line2'] ?? '');
     $subTitle    = $_POST['sub_title'] ?? 'JADWAL UJIAN TENGAH SEMESTER (UTS) SEMESTER GENAP T.A 2024 / 2025';
-    
+
     $penandaTangan = [
         'nama'      => $_POST['signer_name'] ?? 'Elpinaria Girsang, S.ST., M.K.M.',
         'jabatan'   => $_POST['signer_title'] ?? 'Direktur',
@@ -68,19 +68,19 @@ try {
     $haris = isset($_POST['hari']) && is_array($_POST['hari']) ? $_POST['hari'] : [];
     $jams = isset($_POST['jam']) && is_array($_POST['jam']) ? $_POST['jam'] : [];
     $ruangs = isset($_POST['ruang']) && is_array($_POST['ruang']) ? $_POST['ruang'] : [];
-    
+
     $count = max(count($matkuls), count($haris), count($jams), count($ruangs));
-    
+
     if ($count === 0) {
         throw new Exception('Minimal harus ada satu mata kuliah yang diisi!');
     }
-    
+
     for ($i = 0; $i < $count; $i++) {
         $matkul = isset($matkuls[$i]) ? trim($matkuls[$i]) : '';
         $hari = isset($haris[$i]) ? trim($haris[$i]) : '';
         $jam = isset($jams[$i]) ? trim($jams[$i]) : '';
         $ruang = isset($ruangs[$i]) ? trim($ruangs[$i]) : '';
-        
+
         if (!empty($matkul) || !empty($hari)) {
             $jadwal[] = [
                 'hari'   => $hari,
@@ -90,51 +90,51 @@ try {
             ];
         }
     }
-    
+
     if (empty($jadwal)) {
         throw new Exception('Tidak ada mata kuliah yang valid! Pastikan minimal satu baris terisi.');
     }
 
     // 4. Process CSV Data (Bulk Students)
     $students = [];
-    
+
     if (!isset($_FILES['student_csv']) || $_FILES['student_csv']['error'] !== 0) {
         throw new Exception('File CSV tidak diunggah! Pastikan Anda sudah memilih file CSV dengan data mahasiswa.');
     }
-    
+
     if (($handle = fopen($_FILES['student_csv']['tmp_name'], "r")) === FALSE) {
         throw new Exception('Gagal membuka file CSV!');
     }
-    
+
     // Skip header row
     $header = fgetcsv($handle, 10000, ",");
     if (!$header) {
         fclose($handle);
         throw new Exception('File CSV kosong atau format tidak valid!');
     }
-    
+
     $lineNumber = 2; // Track line number for error reporting
-    
+
     while (($row = fgetcsv($handle, 10000, ",")) !== FALSE) {
         $lineNumber++;
-        
+
         // Skip completely empty rows
         if (count($row) < 4 || empty(implode('', $row))) {
             continue;
         }
-        
+
         // Trim whitespace
         $row = array_map('trim', $row);
-        
+
         // Standard format: No (0), Nama (1), NIM (2), Kelas (3)
         $nama = $row[1] ?? '';
         $nim = $row[2] ?? '';
         $kelas = $row[3] ?? '-';
-        
+
         if (empty($nama) || empty($nim)) {
             continue;
         }
-        
+
         // Validate
         $cleanNim = preg_replace('/[^0-9]/', '', $nim);
         if (!empty($nama) && !empty($cleanNim)) {
@@ -146,7 +146,7 @@ try {
         }
     }
     fclose($handle);
-    
+
     if (empty($students)) {
         throw new Exception('File CSV tidak memiliki data mahasiswa yang valid! Baris harus memiliki format: No, NIM, Nama, Kelas');
     }
@@ -163,7 +163,7 @@ try {
         // Generate QR Code
         $qrContent = $student->nama . '_' . $student->tingkat . '_' . $student->nim;
         $qrData = ''; // Default: no QR
-        
+
         // Use output buffering for QR generation to prevent unwanted output
         ob_start();
         try {
@@ -171,9 +171,9 @@ try {
             if ($qrTempFile === false) {
                 throw new Exception('Failed to create temp file for QR code');
             }
-            
+
             @QRcode::png($qrContent, $qrTempFile, QR_ECLEVEL_L, 3, 2);
-            
+
             if (file_exists($qrTempFile)) {
                 $qrData = 'data:image/png;base64,' . base64_encode(file_get_contents($qrTempFile));
                 @unlink($qrTempFile);
@@ -221,7 +221,7 @@ try {
                     </tr>
                 </thead>
                 <tbody>';
-                
+
         $no = 1;
         foreach ($jadwal as $row) {
             $html .= '<tr>
@@ -245,14 +245,14 @@ try {
             </div>
             <div style="clear: both;"></div>
         </div>';
-        
+
         return $html;
     }
 
     // Generate full HTML
     $fullHtmlBody = '';
     $studentCount = count($students);
-    
+
     foreach ($students as $student) {
         $fullHtmlBody .= renderCard($student, $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan);
     }
@@ -265,7 +265,7 @@ try {
         <style>
             @page { margin: 1cm 1.5cm; size: A4 portrait; }
             body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
-            
+
             .card {
                 position: relative;
                 padding-top: 10px;
@@ -289,7 +289,7 @@ try {
     // Generate PDF
     $options = new Options();
     $options->set('isRemoteEnabled', true);
-    
+
     ob_start(); // Buffer PDF generation in case of warnings
     $dompdf = new Dompdf($options);
     $dompdf->loadHtml($html);
@@ -297,12 +297,12 @@ try {
     $dompdf->render();
     $pdfOutput = $dompdf->output();
     ob_end_clean(); // Clean any warnings from dompdf
-    
+
     // Clean ALL buffered output before sending JSON
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    
+
     // Return success response
     echo json_encode([
         'success' => true,
@@ -311,15 +311,15 @@ try {
         'filename' => 'Jadwal_Ujian_' . date('YmdHis') . '.pdf'
     ]);
     exit;
-    
+
 } catch (Exception $e) {
     http_response_code(400);
-    
+
     // Clean ALL buffered output before sending JSON
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    
+
     echo json_encode([
         'success' => false,
         'message' => htmlspecialchars($e->getMessage()),

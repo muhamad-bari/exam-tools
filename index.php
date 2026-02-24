@@ -10,61 +10,71 @@ $toastMessage = null;
 $toastType = null;
 
 // Handle Clear Action
-if (isset($_GET['action']) && $_GET['action'] == 'clear') {
-    if (file_exists('uploads/data.csv')) {
-        unlink('uploads/data.csv');
+if (isset($_GET["action"]) && $_GET["action"] == "clear") {
+    if (file_exists("uploads/data.csv")) {
+        unlink("uploads/data.csv");
     }
     header("Location: index.php");
-    exit;
+    exit();
 }
-
+//
 // Handle File Upload
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
-    $uploadDir = 'uploads/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-    
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_FILES["filecsv"])) {
+    $uploadDir = "uploads/";
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
     // Normalize files array structure
-    $files = $_FILES['filecsv'];
-    $fileCount = is_array($files['name']) ? count($files['name']) : 1;
+    $files = $_FILES["filecsv"];
+    $fileCount = is_array($files["name"]) ? count($files["name"]) : 1;
     $processedFiles = 0;
-    
+
     // Clear old files if new upload (optional, but keeps folder clean)
-    // array_map('unlink', glob("$uploadDir*.csv")); 
+    // array_map('unlink', glob("$uploadDir*.csv"));
 
     for ($i = 0; $i < $fileCount; $i++) {
-        $name = is_array($files['name']) ? $files['name'][$i] : $files['name'];
-        $tmpName = is_array($files['tmp_name']) ? $files['tmp_name'][$i] : $files['tmp_name'];
-        $error = is_array($files['error']) ? $files['error'][$i] : $files['error'];
+        $name = is_array($files["name"]) ? $files["name"][$i] : $files["name"];
+        $tmpName = is_array($files["tmp_name"])
+            ? $files["tmp_name"][$i]
+            : $files["tmp_name"];
+        $error = is_array($files["error"])
+            ? $files["error"][$i]
+            : $files["error"];
 
         if ($error === 0) {
             // Save individual file
-            $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
+            $safeName = preg_replace("/[^a-zA-Z0-9._-]/", "_", $name);
             $destPath = $uploadDir . $safeName;
-            
+
             if (move_uploaded_file($tmpName, $destPath)) {
-                
                 // Generate PDF immediately
-                $pdfPath = 'results/QR_' . pathinfo($safeName, PATHINFO_FILENAME) . '.pdf';
+                $pdfPath =
+                    "results/QR_" .
+                    pathinfo($safeName, PATHINFO_FILENAME) .
+                    ".pdf";
                 generatePDF($destPath, $pdfPath);
 
                 // Read this specific file
-                if (($handle = fopen($destPath, 'r')) !== FALSE) {
+                if (($handle = fopen($destPath, "r")) !== false) {
                     // Skip Header
                     fgetcsv($handle, 10000, ",");
-                    
+
                     $fileHasData = false;
-                    while (($row = fgetcsv($handle, 10000, ",")) !== FALSE) {
+                    while (($row = fgetcsv($handle, 10000, ",")) !== false) {
                         // Skip incomplete rows
                         if (count($row) < 4) {
                             continue;
                         }
 
                         // Standard format: No (0), Nama (1), NIM (2), Kelas (3)
-                        $nama = trim($row[1] ?? '');
-                        $nim = trim($row[2] ?? '');
-                        $kelas = trim($row[3] ?? '-');
+                        $nama = trim($row[1] ?? "");
+                        $nim = trim($row[2] ?? "");
+                        $kelas = trim($row[3] ?? "-");
 
-                        if (empty($nama) || empty($nim)) continue;
+                        if (empty($nama) || empty($nim)) {
+                            continue;
+                        }
 
                         $namep = str_replace(" ", "_", $nama);
                         $kelasp = str_replace(" ", "_", $kelas);
@@ -72,23 +82,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
 
                         // Add to display data with Source Info
                         $data[] = [
-                            "nama"  => $nama,
-                            "nim"   => $nim,
+                            "nama" => $nama,
+                            "nim" => $nim,
                             "kelas" => $kelas,
                             "isiqr" => $isiqr,
-                            "source"=> $name,      // Display name
-                            "file"  => $safeName   // Saved filename for download link
+                            "source" => $name, // Display name
+                            "file" => $safeName, // Saved filename for download link
                         ];
-                        
+
                         $fileHasData = true;
                     }
                     fclose($handle);
-                    if ($fileHasData) $processedFiles++;
+                    if ($fileHasData) {
+                        $processedFiles++;
+                    }
                 }
             }
         }
     }
-    
+
     if ($processedFiles > 0) {
         $showSidebar = true;
         $totalRecords = count($data);
@@ -123,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                 <p style="margin-bottom: 15px; font-size: 0.85rem; color: #7f8c8d; padding: 10px; background: #ecf0f1; border-radius: 4px;">
                     <strong>Format CSV:</strong> No, Nama, NIM, Kelas (sama dengan jadwal generator)
                 </p>
-                
+
                 <form action="index.php" method="post" enctype="multipart/form-data" id="uploadForm">
                     <div class="upload-area" id="dropZone">
                         <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -132,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                         <input type="file" name="filecsv[]" id="filecsv" accept=".csv" multiple required>
                     </div>
                     <div id="fileInfo" class="file-info"></div>
-                    
+
                     <div style="display: flex; gap: 10px; margin-bottom: 1rem;">
                         <button type="submit" class="btn-submit" style="flex: 2;">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Bulk QR
@@ -150,68 +162,75 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
             <div class="sidebar-header">
                 <div>
                     <h2>Results Preview</h2>
-                    <?php if($showSidebar && !empty($data)): ?>
+                    <?php if ($showSidebar && !empty($data)): ?>
                         <span style="font-size: 0.85rem; color: #7f8c8d; font-weight: 500;">
-                            <i class="fa-solid fa-database" style="color: #3498db; margin-right: 4px;"></i> 
+                            <i class="fa-solid fa-database" style="color: #3498db; margin-right: 4px;"></i>
                             <?= count($data) ?> Records found
                         </span>
                     <?php endif; ?>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <?php if($showSidebar && !empty($data)): ?>
+                    <?php if ($showSidebar && !empty($data)): ?>
                         <a href="index.php?action=clear" class="btn-download" style="background-color: #e74c3c;" title="Clear All">
                             <i class="fa-solid fa-trash"></i>
                         </a>
                     <?php endif; ?>
                 </div>
             </div>
-            
+
             <div class="sidebar-content">
                 <?php if ($showSidebar && !empty($data)): ?>
-                    <?php 
+                    <?php
                     // Group data by file source
                     $groupedData = [];
-                    foreach($data as $row) {
-                        $source = $row['source'];
+                    foreach ($data as $row) {
+                        $source = $row["source"];
                         if (!isset($groupedData[$source])) {
                             $groupedData[$source] = [
-                                'file' => $row['file'], // Safe filename for download
-                                'items' => []
+                                "file" => $row["file"], // Safe filename for download
+                                "items" => [],
                             ];
                         }
-                        $groupedData[$source]['items'][] = $row;
+                        $groupedData[$source]["items"][] = $row;
                     }
-                    
+
                     $sectionId = 0;
-                    foreach($groupedData as $sourceName => $group): 
-                        $sectionId++;
-                    ?>
+                    foreach ($groupedData as $sourceName => $group):
+                        $sectionId++; ?>
                         <div class="file-section">
                             <!-- Header with Toggle -->
                             <div class="file-header" onclick="toggleSection('section-<?= $sectionId ?>')">
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <i class="fa-solid fa-chevron-down toggle-icon" id="icon-section-<?= $sectionId ?>"></i>
                                     <span style="font-size: 0.85rem; font-weight: bold; color: #2c3e50;">
-                                        <i class="fa-regular fa-file-lines" style="margin-right: 5px;"></i> 
+                                        <i class="fa-regular fa-file-lines" style="margin-right: 5px;"></i>
                                         <?= htmlspecialchars($sourceName) ?>
                                         <span style="font-size: 0.7rem; color: #7f8c8d; font-weight: normal; margin-left: 5px;">
-                                            (<?= count($group['items']) ?>)
+                                            (<?= count($group["items"]) ?>)
                                         </span>
                                     </span>
                                 </div>
-                                
+
                                 <!-- Stop propagation to prevent collapse when clicking download -->
-                                <a href="download.php?file=<?= urlencode($group['file']) ?>" target="_blank" onclick="event.stopPropagation();" style="font-size: 0.75rem; text-decoration: none; color: #fff; background-color: #27ae60; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+                                <a href="download.php?file=<?= urlencode(
+                                    $group["file"],
+                                ) ?>" target="_blank" onclick="event.stopPropagation();" style="font-size: 0.75rem; text-decoration: none; color: #fff; background-color: #27ae60; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
                                     <i class="fa-solid fa-download"></i> PDF
                                 </a>
                             </div>
 
                             <!-- Collapsible Content -->
                             <div id="section-<?= $sectionId ?>" class="file-items">
-                                <?php foreach($group['items'] as $row): ?>
-                                    <?php 
+                                <?php foreach ($group["items"] as $row): ?>
+                                    <?php
                                     ob_start();
-                                    QRcode::png($row["isiqr"], null, QR_ECLEVEL_L, 3, 2);
+                                    QRcode::png(
+                                        $row["isiqr"],
+                                        null,
+                                        QR_ECLEVEL_L,
+                                        3,
+                                        2,
+                                    );
                                     $imageString = ob_get_clean();
                                     $base64 = base64_encode($imageString);
                                     ?>
@@ -219,16 +238,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                                         <img src="data:image/png;base64,<?= $base64 ?>" alt="QR Code" class="qr">
                                         <div class="preview-details">
                                             <table>
-                                                <tr><td><strong>NIM</strong></td><td>: <?= htmlspecialchars($row["nim"]) ?></td></tr>
-                                                <tr><td><strong>Nama</strong></td><td>: <?= htmlspecialchars($row["nama"]) ?></td></tr>
-                                                <tr><td><strong>Kelas</strong></td><td>: <?= htmlspecialchars($row["kelas"]) ?></td></tr>
+                                                <tr><td><strong>NIM</strong></td><td>: <?= htmlspecialchars(
+                                                    $row["nim"],
+                                                ) ?></td></tr>
+                                                <tr><td><strong>Nama</strong></td><td>: <?= htmlspecialchars(
+                                                    $row["nama"],
+                                                ) ?></td></tr>
+                                                <tr><td><strong>Kelas</strong></td><td>: <?= htmlspecialchars(
+                                                    $row["kelas"],
+                                                ) ?></td></tr>
                                             </table>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    <?php
+                    endforeach;
+                    ?>
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fa-regular fa-file-image" style="font-size: 3rem; margin-bottom: 1rem;"></i>
@@ -239,19 +266,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
             </div>
         </div>
     </div>
-    
+
     <style>
         .file-section {
             margin-bottom: 15px;
         }
         .file-header {
-            background: #eef2f3; 
-            padding: 10px 12px; 
-            border-radius: 6px; 
+            background: #eef2f3;
+            padding: 10px 12px;
+            border-radius: 6px;
             margin-bottom: 5px;
-            border-left: 4px solid #3498db; 
-            display: flex; 
-            justify-content: space-between; 
+            border-left: 4px solid #3498db;
+            display: flex;
+            justify-content: space-between;
             align-items: center;
             cursor: pointer;
             transition: background 0.2s;
@@ -278,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
         function toggleSection(id) {
             const content = document.getElementById(id);
             const icon = document.getElementById('icon-' + id);
-            
+
             if (content.style.display === "none") {
                 content.style.display = "block";
                 icon.style.transform = "rotate(0deg)";
@@ -308,7 +335,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            
+
             let iconClass = 'fa-circle-info';
             if (type === 'success') iconClass = 'fa-circle-check';
             if (type === 'error') iconClass = 'fa-triangle-exclamation';
@@ -392,7 +419,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
 
                 let validCount = 0;
                 let fileNames = [];
-                
+
                 for(let i=0; i<files.length; i++) {
                     if (files[i].type === "text/csv" || files[i].name.endsWith('.csv')) {
                         validCount++;
@@ -414,7 +441,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                 } else {
                     fileInfo.innerHTML = `<i class="fa-solid fa-layer-group"></i> <strong>${validCount} Files Selected:</strong><br><small>${fileNames.join(', ')}</small>`;
                 }
-                
+
                 log('Files ready for upload', fileNames);
             }
         }

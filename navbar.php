@@ -4,12 +4,18 @@
     </div>
     <ul class="navbar-menu">
         <li>
-            <a href="index.php" class="<?= basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : '' ?>">
+            <a href="index.php" class="<?= basename($_SERVER["PHP_SELF"]) ==
+            "index.php"
+                ? "active"
+                : "" ?>">
                 <i class="fa-solid fa-qrcode"></i> QR Generator
             </a>
         </li>
         <li>
-            <a href="jadwal.php" class="<?= basename($_SERVER['PHP_SELF']) == 'jadwal.php' ? 'active' : '' ?>">
+            <a href="jadwal.php" class="<?= basename($_SERVER["PHP_SELF"]) ==
+            "jadwal.php"
+                ? "active"
+                : "" ?>">
                 <i class="fa-solid fa-calendar-days"></i> Jadwal Ujian
             </a>
         </li>

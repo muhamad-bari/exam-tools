@@ -1,7 +1,7 @@
 <?php
 session_start();
 // Increase limits for bulk generation
-ini_set('memory_limit', '512M');
+ini_set("memory_limit", "512M");
 set_time_limit(300);
 
 // Note: PDF Generation dipindahkan ke api_generate_jadwal.php
@@ -37,7 +37,7 @@ set_time_limit(300);
             display: flex;
             justify-content: center;
         }
-        
+
         /* Preview Card Logic */
         .preview-paper {
             width: 210mm;
@@ -69,15 +69,15 @@ set_time_limit(300);
         /* Form Controls */
         .form-group { margin-bottom: 10px; }
         .form-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: #444; }
-        .form-control { 
-            width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; 
+        .form-control {
+            width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem;
         }
 
         /* Table Input */
         .table-input { width: 100%; border-collapse: collapse; }
         .table-input td { padding: 4px; }
         .table-input input { width: 100%; border: 1px solid #ddd; padding: 6px; border-radius: 4px; }
-        
+
         .btn-action {
             width: 100%; padding: 6px; border: none; border-radius: 4px; color: white; cursor: pointer;
         }
@@ -100,7 +100,7 @@ set_time_limit(300);
                         <h3 style="color: #3498db; margin: 0; border: none; padding: 0;"><i class="fa-solid fa-save"></i> Saved Sessions</h3>
                         <i id="sessionToggleIcon" class="fa-solid fa-chevron-up" style="color: #3498db;"></i>
                     </div>
-                    
+
                     <div id="sessionContent" style="margin-top: 15px;">
                         <!-- Search & Tools -->
                         <div style="margin-bottom: 10px; display: flex; gap: 5px;">
@@ -172,7 +172,9 @@ set_time_limit(300);
                     </div>
                     <div class="form-group">
                         <label class="form-label">Tanggal Tanda Tangan</label>
-                        <input type="text" name="signer_date" class="form-control" value="<?= date('d F Y') ?>" oninput="updatePreview()">
+                        <input type="text" name="signer_date" class="form-control" value="<?= date(
+                            "d F Y",
+                        ) ?>" oninput="updatePreview()">
                     </div>
                 </div>
 
@@ -223,7 +225,7 @@ set_time_limit(300);
 
                 <div style="margin-top: 20px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
                     <h3 style="margin: 0 0 10px 0; font-size: 1rem; color: #2c3e50;">Actions</h3>
-                    
+
                     <div style="display: flex; gap: 5px; margin-bottom: 10px; align-items: center;">
                         <button type="button" class="btn-action" style="background:#f39c12; width: auto; padding: 0 15px; white-space: nowrap;" onclick="newSession()" title="Reset Form / New Session">
                             <i class="fa-solid fa-file-circle-plus"></i> New
@@ -250,7 +252,7 @@ set_time_limit(300);
                 <!-- Preview Card Content (Simulating PDF Layout) -->
                 <div id="previewCard">
                     <img id="previewLogoImg" src="" style="display:none; width: 60px; height: auto; position: absolute; margin-left: 20px;">
-                    
+
                     <div style="text-align: center; margin-bottom: 20px; padding: 0 40px 0 110px;">
                         <h3 id="prev_h1" style="margin: 0; font-size: 14px;">AKADEMI KEBIDANAN WIJAYA HUSADA</h3>
                         <h3 id="prev_h2" style="margin: 0; font-size: 14px;"></h3>
@@ -286,7 +288,9 @@ set_time_limit(300);
                     </table>
 
                     <div style="text-align: center; float: right; width: 45%;">
-                        <p id="prev_date" style="margin-bottom: 0; font-size: 11px;">Bogor, <?= date('d F Y') ?></p>
+                        <p id="prev_date" style="margin-bottom: 0; font-size: 11px;">Bogor, <?= date(
+                            "d F Y",
+                        ) ?></p>
                         <p style="margin-bottom: 40px; font-size: 11px;">Mengetahui<br><span id="prev_inst_signer">Akademi Kebidanan Wijaya Husada</span><br><span id="prev_title">Direktur</span></p>
                         <p id="prev_name" style="font-weight: bold; text-decoration: underline; font-size: 11px;">Elpinaria Girsang, S.ST., M.K.M.</p>
                     </div>
@@ -336,7 +340,7 @@ set_time_limit(300);
             document.getElementById('prev_h1').innerText = document.getElementsByName('header_line1')[0].value;
             document.getElementById('prev_h2').innerText = document.getElementsByName('header_line2')[0].value;
             document.getElementById('prev_sub').innerText = document.getElementsByName('sub_title')[0].value;
-            
+
             // Signer
             document.getElementById('prev_name').innerText = document.getElementsByName('signer_name')[0].value;
             document.getElementById('prev_title').innerText = document.getElementsByName('signer_title')[0].value;
@@ -345,12 +349,12 @@ set_time_limit(300);
             // Schedule Table
             const tbody = document.getElementById('previewScheduleBody');
             tbody.innerHTML = '';
-            
+
             const inputsHari = document.getElementsByName('hari[]');
             const inputsMatkul = document.getElementsByName('matkul[]');
             const inputsJam = document.getElementsByName('jam[]');
             const inputsRuang = document.getElementsByName('ruang[]');
-            
+
             for (let i = 0; i < inputsMatkul.length; i++) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -372,21 +376,21 @@ set_time_limit(300);
         function setupDragAndDrop(dropZoneId, inputId, fileNameId, selectHandler) {
             const dropZone = document.getElementById(dropZoneId);
             const input = document.getElementById(inputId);
-            
+
             dropZone.addEventListener('click', () => input.click());
-            
+
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropZone.addEventListener(eventName, preventDefaults, false);
             });
-            
+
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropZone.addEventListener(eventName, () => dropZone.style.borderColor = '#3498db', false);
             });
-            
+
             ['dragleave', 'drop'].forEach(eventName => {
                 dropZone.addEventListener(eventName, () => dropZone.style.borderColor = '#dfe6e9', false);
             });
-            
+
             dropZone.addEventListener('drop', (e) => handleDrop(e, input, selectHandler), false);
         }
 
@@ -398,7 +402,7 @@ set_time_limit(300);
         function handleDrop(e, input, callback) {
             const dt = e.dataTransfer;
             const files = dt.files;
-            
+
             if (files.length > 0) {
                 try {
                     const dataTransfer = new DataTransfer();
@@ -450,11 +454,11 @@ set_time_limit(300);
                     document.getElementById('csvLoadingSpinner').style.display = 'none';
                     document.getElementById('csvIcon').style.display = 'block';
                     document.getElementById('csvText').style.display = 'block';
-                    
+
                     const display = document.getElementById('csvFileName');
                     display.style.display = 'block';
                     display.innerHTML = `<i class="fa-solid fa-file-csv"></i> ${fileName} (${(fileSize / 1024).toFixed(2)} KB)`;
-                    
+
                     document.getElementById('deleteCsvBtn').style.display = 'inline-block';
                     showToast('File CSV berhasil dimuat!', 'success');
                 }, 500);
@@ -488,7 +492,7 @@ set_time_limit(300);
                 const file = files[0];
                 const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
                 const fileName = file.name;
-                
+
                 if (!validTypes.includes(file.type)) {
                     showToast('Hanya format JPG, JPEG, dan PNG yang diperbolehkan!', 'error');
                     input.value = '';
@@ -523,17 +527,17 @@ set_time_limit(300);
                         document.getElementById('logoLoadingSpinner').style.display = 'none';
                         document.getElementById('logoIcon').style.display = 'block';
                         document.getElementById('logoText').style.display = 'block';
-                        
+
                         const img = document.getElementById('previewLogoImg');
                         img.src = e.target.result;
                         img.style.display = 'block';
                         document.getElementById('existing_logo_data').value = e.target.result;
-                        
+
                         const display = document.getElementById('logoFileName');
                         display.style.display = 'block';
                         display.innerHTML = `<i class="fa-solid fa-image"></i> ${fileName}`;
                         document.getElementById('deleteLogoBtn').style.display = 'inline-block';
-                        
+
                         showToast('Logo berhasil dimuat!', 'success');
                     }, 500);
                 };
@@ -547,7 +551,7 @@ set_time_limit(300);
                 reader.readAsDataURL(file);
             }
         }
-        
+
         // Delete Logo File Handler
         function deleteLogoFile() {
             const logoInput = document.getElementById('logo');
@@ -555,24 +559,24 @@ set_time_limit(300);
             const deleteLogoBtn = document.getElementById('deleteLogoBtn');
             const previewLogoImg = document.getElementById('previewLogoImg');
             const hiddenLogoInput = document.getElementById('existing_logo_data');
-            
+
             // Clear file input
             logoInput.value = '';
             hiddenLogoInput.value = '';
-            
+
             // Hide file name display
             logoFileName.style.display = 'none';
             logoFileName.innerHTML = '';
-            
+
             // Hide delete button
             deleteLogoBtn.style.display = 'none';
-            
+
             // Hide preview image
             if (previewLogoImg) {
                 previewLogoImg.style.display = 'none';
                 previewLogoImg.src = '';
             }
-            
+
             showToast('Logo berhasil dihapus', 'success');
         }
 
@@ -581,17 +585,17 @@ set_time_limit(300);
             const csvInput = document.getElementById('student_csv');
             const csvFileName = document.getElementById('csvFileName');
             const deleteCsvBtn = document.getElementById('deleteCsvBtn');
-            
+
             // Clear file input
             csvInput.value = '';
-            
+
             // Hide file name display
             csvFileName.style.display = 'none';
             csvFileName.innerHTML = '';
-            
+
             // Hide delete button
             deleteCsvBtn.style.display = 'none';
-            
+
             showToast('File CSV berhasil dihapus', 'success');
         }
 
@@ -600,7 +604,7 @@ set_time_limit(300);
             document.getElementById('prev_h1').innerText = document.getElementsByName('header_line1')[0].value;
             document.getElementById('prev_h2').innerText = document.getElementsByName('header_line2')[0].value;
             document.getElementById('prev_sub').innerText = document.getElementsByName('sub_title')[0].value;
-            
+
             // Signer
             document.getElementById('prev_name').innerText = document.getElementsByName('signer_name')[0].value;
             document.getElementById('prev_inst_signer').innerText = document.getElementsByName('signer_institution')[0].value;
@@ -610,12 +614,12 @@ set_time_limit(300);
             // Schedule Table
             const tbody = document.getElementById('previewScheduleBody');
             tbody.innerHTML = '';
-            
+
             const inputsHari = document.getElementsByName('hari[]');
             const inputsMatkul = document.getElementsByName('matkul[]');
             const inputsJam = document.getElementsByName('jam[]');
             const inputsRuang = document.getElementsByName('ruang[]');
-            
+
             for (let i = 0; i < inputsMatkul.length; i++) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -633,7 +637,7 @@ set_time_limit(300);
         // AJAX Form Submission Handler
         function generatePDF() {
             const form = document.getElementById('scheduleForm');
-            
+
             // Manual Validation for CSV
             const csvInput = document.getElementById('student_csv');
             if (!csvInput.files || csvInput.files.length === 0) {
@@ -648,12 +652,12 @@ set_time_limit(300);
             const formData = new FormData(form);
             const btn = document.getElementById('generatePdfBtn');
             const btnText = document.getElementById('btnText');
-            
+
             // Disable button and show loading state
             btn.disabled = true;
             const originalText = btnText.innerHTML;
             btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
-            
+
             fetch('generate_pdf_api.php', {
                 method: 'POST',
                 body: formData
@@ -674,11 +678,11 @@ set_time_limit(300);
                         throw new Error(`Server Error (${response.status}): ${text.substring(0, 50)}...`);
                     }
                 }
-                
+
                 if (!isJson) {
                     throw new Error('Response bukan JSON. Kemungkinan ada error di server.');
                 }
-                
+
                 return response.json();
             })
             .then(data => {
@@ -689,7 +693,7 @@ set_time_limit(300);
                     for (let i = 0; i < binaryString.length; i++) {
                         bytes[i] = binaryString.charCodeAt(i);
                     }
-                    
+
                     const blob = new Blob([bytes], { type: 'application/pdf' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -699,7 +703,7 @@ set_time_limit(300);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
-                    
+
                     showToast(data.message, 'success');
                 } else if (data && !data.success) {
                     showToast(data.message || 'Gagal membuat PDF', 'error');
@@ -730,7 +734,7 @@ set_time_limit(300);
         function toggleSessionSection() {
             const content = document.getElementById('sessionContent');
             const icon = document.getElementById('sessionToggleIcon');
-            
+
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 icon.className = 'fa-solid fa-chevron-up';
@@ -745,7 +749,7 @@ set_time_limit(300);
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        allSessions = data.data; 
+                        allSessions = data.data;
                         allFolders = data.folders || [];
                         updateFolderSelect();
                         renderSessionTree();
@@ -930,7 +934,7 @@ set_time_limit(300);
             folderDiv.setAttribute('draggable', 'true');
             folderDiv.setAttribute('data-id', f.id);
             folderDiv.setAttribute('data-type', 'folder');
-            
+
             // Drag Events
             folderDiv.ondragstart = handleFolderDragStart;
             folderDiv.ondragover = handleFolderDragOver;
@@ -941,7 +945,7 @@ set_time_limit(300);
             const header = document.createElement('div');
             header.style.cssText = 'background: #ecf0f1; padding: 6px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9rem; color: #2c3e50; border: 1px solid transparent;';
             header.className = 'folder-header';
-            
+
             // Toggle Logic
             header.onclick = function(e) {
                 if (e.target.closest('.folder-action')) return;
@@ -959,7 +963,7 @@ set_time_limit(300);
             header.innerHTML = `
                 <div style="display:flex; align-items:center;">
                     <i class="fa-solid fa-grip-vertical" style="color:#bdc3c7; margin-right:5px; cursor:grab; font-size:0.8rem;"></i>
-                    <i class="fa-solid fa-folder toggle-icon" style="margin-right: 5px; color: #f39c12;"></i> 
+                    <i class="fa-solid fa-folder toggle-icon" style="margin-right: 5px; color: #f39c12;"></i>
                     ${f.name}
                 </div>
                 <div>
@@ -992,7 +996,7 @@ set_time_limit(300);
             const date = new Date(s.created_at).toLocaleDateString();
             const isActive = s.id == currentSessionId;
             const activeStyle = isActive ? 'background-color: #d1ecf1; border-left: 4px solid #17a2b8;' : 'border-bottom: 1px solid #eee;';
-            
+
             const div = document.createElement('div');
             div.setAttribute('draggable', 'true');
             div.setAttribute('data-id', s.id);
@@ -1036,19 +1040,19 @@ set_time_limit(300);
             e.preventDefault();
             e.stopPropagation(); // Prevent parent handlers from triggering
             // Add visual cue
-            const target = e.currentTarget.classList.contains('folder-item') 
-                ? e.currentTarget.querySelector('.folder-header') 
+            const target = e.currentTarget.classList.contains('folder-item')
+                ? e.currentTarget.querySelector('.folder-header')
                 : e.currentTarget; // or sessionList
-            
+
             if(target) target.style.border = '2px dashed #3498db';
         }
 
         function handleFolderDragLeave(e) {
             e.stopPropagation(); // Prevent parent handlers from triggering
-            const target = e.currentTarget.classList.contains('folder-item') 
-                ? e.currentTarget.querySelector('.folder-header') 
+            const target = e.currentTarget.classList.contains('folder-item')
+                ? e.currentTarget.querySelector('.folder-header')
                 : e.currentTarget;
-            
+
             if(target) target.style.border = '1px solid transparent';
             if(e.currentTarget.id === 'sessionList') e.currentTarget.style.border = '1px solid #eee'; // Reset root style
         }
@@ -1056,10 +1060,10 @@ set_time_limit(300);
         function handleFolderDrop(e, targetFolderId) {
             e.preventDefault();
             e.stopPropagation(); // Prevent parent handlers from triggering
-            
+
             // Reset styles
-            const target = e.currentTarget.classList.contains('folder-item') 
-                ? e.currentTarget.querySelector('.folder-header') 
+            const target = e.currentTarget.classList.contains('folder-item')
+                ? e.currentTarget.querySelector('.folder-header')
                 : e.currentTarget;
             if(target) target.style.border = '1px solid transparent';
             if(e.currentTarget.id === 'sessionList') e.currentTarget.style.border = '1px solid #eee';
@@ -1079,10 +1083,10 @@ set_time_limit(300);
             fetch('api_sessions.php?action=move_item', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    type: type, 
-                    id: parseInt(id), 
-                    target_id: finalTargetId 
+                body: JSON.stringify({
+                    type: type,
+                    id: parseInt(id),
+                    target_id: finalTargetId
                 })
             })
             .then(r => r.json())
@@ -1190,9 +1194,9 @@ set_time_limit(300);
             fetch('api_sessions.php?action=save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    name: name, 
-                    data: JSON.stringify(data), 
+                body: JSON.stringify({
+                    name: name,
+                    data: JSON.stringify(data),
                     id: currentSessionId,
                     folder_id: folderId
                 })
@@ -1258,7 +1262,7 @@ set_time_limit(300);
             document.getElementsByName('signer_name')[0].value = 'Elpinaria Girsang, S.ST., M.K.M.';
             document.getElementsByName('signer_institution')[0].value = 'Akademi Kebidanan Wijaya Husada';
             document.getElementsByName('signer_title')[0].value = 'Direktur';
-            
+
             // Date (Today)
             const today = new Date();
             const day = String(today.getDate()).padStart(2, '0');

@@ -3,7 +3,7 @@
 <head>
 <style>
     @page {
-        margin: 10mm; 
+        margin: 10mm;
     }
     body {
         font-family: 'Helvetica', sans-serif;
@@ -13,7 +13,7 @@
     /* Grid Utama untuk menata 2 kartu per baris */
     table.grid-container {
         width: 100%;
-        border-collapse: separate; 
+        border-collapse: separate;
         border-spacing: 10px; /* Jarak antar kartu */
         margin-top: -10px; /* Kompensasi margin atas */
     }
@@ -66,7 +66,7 @@
         width: 100%;
         border-collapse: collapse;
     }
-    
+
     table.details td {
         vertical-align: top;
         padding: 1px 0;
@@ -77,12 +77,12 @@
         width: 40px;
         white-space: nowrap;
     }
-    
+
     .sep {
         width: 10px;
         text-align: center;
     }
-    
+
     .val {
         /* Membiarkan kolom ini mengisi sisa ruang */
     }
@@ -92,27 +92,28 @@
 <body>
 
     <table class="grid-container">
-        <?php 
+        <?php
         $i = 0;
-        foreach($data as $row) {
+        foreach ($data as $row) {
+
             // Buka baris baru setiap item genap (0, 2, 4...)
             if ($i % 2 == 0) {
-                echo '<tr>';
+                echo "<tr>";
             }
 
             // Generate QR Code (In-Memory)
             ob_start();
-            QRcode::png($row["isiqr"], null, QR_ECLEVEL_L, 3, 1); 
+            QRcode::png($row["isiqr"], null, QR_ECLEVEL_L, 3, 1);
             $imageString = ob_get_clean();
             $base64 = base64_encode($imageString);
             ?>
-            
+
             <td class="grid-cell">
                 <div class="card-box">
                     <table class="card-content">
                         <tr>
                             <td class="qr-area">
-                                <?php if($base64): ?>
+                                <?php if ($base64): ?>
                                     <img src="data:image/png;base64,<?= $base64 ?>" class="qr-code">
                                 <?php endif; ?>
                             </td>
@@ -122,17 +123,23 @@
                                     <tr>
                                         <td class="label">NIM</td>
                                         <td class="sep">:</td>
-                                        <td class="val"><strong><?= htmlspecialchars($row["nim"]) ?></strong></td>
+                                        <td class="val"><strong><?= htmlspecialchars(
+                                            $row["nim"],
+                                        ) ?></strong></td>
                                     </tr>
                                     <tr>
                                         <td class="label">Nama</td>
                                         <td class="sep">:</td>
-                                        <td class="val"><?= htmlspecialchars($row["nama"]) ?></td>
+                                        <td class="val"><?= htmlspecialchars(
+                                            $row["nama"],
+                                        ) ?></td>
                                     </tr>
                                     <tr>
                                         <td class="label">Kelas</td>
                                         <td class="sep">:</td>
-                                        <td class="val"><?= htmlspecialchars($row["kelas"]) ?></td>
+                                        <td class="val"><?= htmlspecialchars(
+                                            $row["kelas"],
+                                        ) ?></td>
                                     </tr>
                                 </table>
                             </td>
@@ -144,9 +151,10 @@
             <?php
             // Tutup baris setiap item ganjil (1, 3, 5...)
             if ($i % 2 == 1) {
-                echo '</tr>';
+                echo "</tr>";
             }
             $i++;
+
         }
 
         // Jika jumlah data ganjil, tutup baris terakhir dengan sel kosong
