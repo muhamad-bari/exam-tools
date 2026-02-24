@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    container_name: exam-tools
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    volumes:
+      - .:/var/www/html
+      - ./uploads:/var/www/html/uploads
+      - ./results:/var/www/html/results
+      - ./data:/var/www/html/data
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - SHOW_WELCOME_MESSAGE=false
+      - WEBROOT=/var/www/html
+      - NGINX_WEBROOT=/var/www/html

@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 
 try {
-    $db = new PDO('sqlite:database.sqlite');
+    $db = new PDO('sqlite:' . __DIR__ . '/data/database.sqlite');
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Auto-initialize database schema if not exists
