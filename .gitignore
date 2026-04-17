@@ -1,5 +1,6 @@
-uploads/
-results/
-vendor/
+/uploads/
+/results/
+/vendor/
 .cocoindex_code/
 .DS_Store
+*.log
