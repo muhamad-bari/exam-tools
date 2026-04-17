@@ -9,6 +9,11 @@
             </a>
         </li>
         <li>
+            <a href="master_data.php" class="<?= basename($_SERVER['PHP_SELF']) == 'master_data.php' ? 'active' : '' ?>">
+                <i class="fa-solid fa-database"></i> Master Data
+            </a>
+        </li>
+        <li>
             <a href="jadwal.php" class="<?= basename($_SERVER['PHP_SELF']) == 'jadwal.php' ? 'active' : '' ?>">
                 <i class="fa-solid fa-calendar-days"></i> Jadwal Ujian
             </a>
