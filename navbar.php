@@ -18,5 +18,10 @@
                 <i class="fa-solid fa-calendar-days"></i> Jadwal Ujian
             </a>
         </li>
+        <li>
+            <a href="rekap_nilai.php" class="<?= basename($_SERVER['PHP_SELF']) == 'rekap_nilai.php' ? 'active' : '' ?>">
+                <i class="fa-solid fa-chart-column"></i> Rekap Nilai
+            </a>
+        </li>
     </ul>
 </nav>

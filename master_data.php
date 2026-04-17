@@ -38,6 +38,15 @@ session_start();
         .table-pagination-actions { display: flex; gap: 8px; }
         .pager-btn { border: none; border-radius: 8px; background: #e2e8f0; color: #334155; padding: 6px 10px; cursor: pointer; font-size: 0.78rem; font-weight: 600; }
         .pager-btn:disabled { opacity: .45; cursor: not-allowed; }
+        .icon-btn { width: 34px; height: 34px; border: none; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #fff; }
+        .icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.56); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 9998; }
+        .modal-backdrop.show { display: flex; }
+        .modal-card { width: min(920px, 100%); max-height: calc(100vh - 40px); overflow: auto; background: #fff; border-radius: 18px; border: 1px solid #dbe4ee; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25); }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px; border-bottom: 1px solid #e5edf5; }
+        .modal-body { padding: 20px; display: grid; gap: 14px; }
+        .modal-close { width: 36px; height: 36px; border: none; border-radius: 10px; background: #e2e8f0; color: #334155; cursor: pointer; }
+        .modal-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
         #toast-container { position: fixed; top: 78px; right: 20px; z-index: 9999; display: grid; gap: 8px; }
         .toast { min-width: 240px; padding: 10px 14px; border-radius: 10px; color: #fff; background: #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.16); opacity: 0; transform: translateY(-10px); transition: all .25s ease; }
         .toast.show { opacity: 1; transform: translateY(0); }
@@ -56,10 +65,27 @@ session_start();
                 <p class="muted">Kelola data mahasiswa, kelas, dan mata kuliah di sini. Setelah import, `jadwal.php` fokus dipakai untuk membuat jadwal.</p>
                 <div class="stack">
                     <div>
-                        <h2>Import Mahasiswa + Kelas</h2>
+                        <h2>Tambah Kelas Manual</h2>
+                        <div class="stack" style="gap:10px;">
+                            <input type="text" id="newClassName" class="form-control" placeholder="Nama kelas, mis. S1 KESMAS TK I/II" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff;">
+                            <input type="text" id="newClassCode" class="form-control" placeholder="Kode kelas (opsional)" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff;">
+                            <div class="actions" style="margin-top:0;">
+                                <button type="button" class="btn gray" onclick="createClass()"><i class="fa-solid fa-plus"></i> Tambah Kelas</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h2>Import Mahasiswa</h2>
+                        <div style="display:grid; gap:8px; margin-bottom:12px;">
+                            <label for="studentImportClass" class="muted" style="font-weight:600;">Pilih kelas tujuan</label>
+                            <select id="studentImportClass" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff;">
+                                <option value="">Pilih kelas terlebih dahulu</option>
+                            </select>
+                            <div class="muted">CSV mahasiswa sekarang cukup berisi `No, Nama, NIM`. Semua baris akan masuk ke kelas yang dipilih.</div>
+                        </div>
                         <label class="drop" id="studentsDrop" for="studentsCsv">
                             <strong><i class="fa-solid fa-users"></i> Pilih file CSV mahasiswa</strong>
-                            <div id="studentsInfo" class="muted" style="margin-top:8px;">Gunakan format `No, Nama, NIM, Kelas`. Bisa pilih lebih dari 1 file.</div>
+                            <div id="studentsInfo" class="muted" style="margin-top:8px;">Gunakan format `No, Nama, NIM`. Bisa pilih lebih dari 1 file.</div>
                         </label>
                         <input type="file" id="studentsCsv" accept=".csv" multiple style="display:none;">
                         <div class="actions">
@@ -126,12 +152,48 @@ session_start();
             </div>
         </div>
     </div>
+    <div id="classStudentsModal" class="modal-backdrop" onclick="handleClassStudentsBackdrop(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h2 id="classStudentsModalTitle" style="margin:0 0 6px;">Mahasiswa Kelas</h2>
+                    <p id="classStudentsModalInfo" class="muted" style="margin:0;">Memuat data mahasiswa...</p>
+                </div>
+                <button type="button" class="modal-close" onclick="closeClassStudentsModal()" title="Tutup">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-toolbar">
+                    <button type="button" class="btn primary" style="flex:0 0 auto;" onclick="addStudentManually()"><i class="fa-solid fa-user-plus"></i> Tambah Mahasiswa</button>
+                    <button type="button" class="pager-btn" onclick="reloadClassStudentsModal()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>No</th><th>Nama</th><th>NIM</th></tr></thead>
+                        <tbody id="classStudentsModalBody"><tr><td colspan="3" style="text-align:center; color:#64748b;">Memuat data mahasiswa...</td></tr></tbody>
+                    </table>
+                    <div class="table-pagination">
+                        <span class="table-pagination-info" id="classStudentsModalPageInfo">Page 1 / 1</span>
+                        <div class="table-pagination-actions">
+                            <button type="button" class="pager-btn" id="classStudentsModalPrevBtn" onclick="changeClassStudentsModalPage(-1)" disabled>Prev</button>
+                            <button type="button" class="pager-btn" id="classStudentsModalNextBtn" onclick="changeClassStudentsModalPage(1)" disabled>Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         const pageSize = 5;
+        const studentModalPageSize = 10;
         let allClassRows = [];
         let allSubjectRows = [];
         let classPage = 1;
         let subjectPage = 1;
+        let currentStudentModalClassId = null;
+        let currentStudentModalRows = [];
+        let currentStudentModalPage = 1;
 
         function escapeHtml(value) {
             return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -202,7 +264,7 @@ session_start();
                 ? fileNames[0]
                 : `${fileNames.length} file dipilih: ${fileNames.join(', ')}`;
         }
-        function renderPagedTable(rows, bodyId, pageInfoId, prevBtnId, nextBtnId, currentPage, renderRow, emptyHtml) {
+        function renderPagedTable(rows, bodyId, pageInfoId, prevBtnId, nextBtnId, currentPage, renderRow, emptyHtml, pageSizeOverride = pageSize) {
             const body = document.getElementById(bodyId);
             const pageInfo = document.getElementById(pageInfoId);
             const prevBtn = document.getElementById(prevBtnId);
@@ -216,12 +278,12 @@ session_start();
                 return 1;
             }
 
-            const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+            const totalPages = Math.max(1, Math.ceil(rows.length / pageSizeOverride));
             const safePage = Math.min(Math.max(currentPage, 1), totalPages);
-            const startIndex = (safePage - 1) * pageSize;
-            const visibleRows = rows.slice(startIndex, startIndex + pageSize);
+            const startIndex = (safePage - 1) * pageSizeOverride;
+            const visibleRows = rows.slice(startIndex, startIndex + pageSizeOverride);
 
-            body.innerHTML = visibleRows.map(renderRow).join('');
+            body.innerHTML = visibleRows.map((item, index) => renderRow(item, index, startIndex)).join('');
             pageInfo.textContent = `Page ${safePage} / ${totalPages}`;
             prevBtn.disabled = safePage <= 1;
             nextBtn.disabled = safePage >= totalPages;
@@ -240,9 +302,12 @@ session_start();
                 item => {
                     const canPromote = !!item.next_class_name;
                     const promoteLabel = canPromote ? escapeHtml(item.next_class_name) : '<span style="color:#94a3b8;">Format belum dikenali</span>';
-                    const actionButton = canPromote
-                        ? `<button type="button" class="pager-btn" style="background:#2563eb; color:#fff;" onclick="promoteClass(${Number(item.id)})">Naik Kelas</button>`
-                        : '<span style="color:#94a3b8; font-size:0.8rem;">Tidak tersedia</span>';
+                    const actionButton = `<div style="display:flex; gap:6px; flex-wrap:wrap;">`
+                        + `<button type="button" class="icon-btn" style="background:#475569;" onclick="openClassStudentsModal(${Number(item.id)})" title="Lihat mahasiswa"><i class="fa-solid fa-circle-exclamation"></i></button>`
+                        + `<button type="button" class="icon-btn" style="background:#2563eb;" onclick="promoteClass(${Number(item.id)})" title="Naik kelas" ${canPromote ? '' : 'disabled'}><i class="fa-solid fa-arrow-up-right-dots"></i></button>`
+                        + `<button type="button" class="icon-btn" style="background:#f59e0b;" onclick="editClass(${Number(item.id)})" title="Edit kelas"><i class="fa-solid fa-pen"></i></button>`
+                        + `<button type="button" class="icon-btn" style="background:#dc2626;" onclick="deleteClass(${Number(item.id)})" title="Hapus kelas"><i class="fa-solid fa-trash"></i></button>`
+                        + `</div>`;
                     return `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.code)}</td><td>${escapeHtml(item.student_count)}</td><td>${promoteLabel}</td><td>${actionButton}</td></tr>`;
                 },
                 '<tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada data kelas.</td></tr>'
@@ -266,6 +331,18 @@ session_start();
             );
         }
 
+        function renderStudentImportClassOptions(selectedClassId = '') {
+            const select = document.getElementById('studentImportClass');
+            const options = ['<option value="">Pilih kelas terlebih dahulu</option>'];
+
+            for (const item of allClassRows) {
+                const selected = String(item.id) === String(selectedClassId) ? ' selected' : '';
+                options.push(`<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}</option>`);
+            }
+
+            select.innerHTML = options.join('');
+        }
+
         function changeClassPage(direction) {
             classPage += direction;
             renderClassTable();
@@ -274,6 +351,187 @@ session_start();
         function changeSubjectPage(direction) {
             subjectPage += direction;
             renderSubjectTable();
+        }
+
+        function createClass() {
+            const nameInput = document.getElementById('newClassName');
+            const codeInput = document.getElementById('newClassCode');
+            const name = nameInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (!name) {
+                showToast('Nama kelas wajib diisi', 'error');
+                return;
+            }
+
+            fetch('api_master_data.php?action=create_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, code })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Tambah kelas gagal');
+                    }
+
+                    nameInput.value = '';
+                    codeInput.value = '';
+                    return loadOverview(true).then(() => showToast(`Kelas ditambahkan: ${res.data.name}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function handleClassStudentsBackdrop(event) {
+            if (event.target && event.target.id === 'classStudentsModal') {
+                closeClassStudentsModal();
+            }
+        }
+
+        function closeClassStudentsModal() {
+            document.getElementById('classStudentsModal').classList.remove('show');
+            currentStudentModalClassId = null;
+            currentStudentModalRows = [];
+            currentStudentModalPage = 1;
+        }
+
+        function renderClassStudentsModalBody() {
+            currentStudentModalPage = renderPagedTable(
+                currentStudentModalRows,
+                'classStudentsModalBody',
+                'classStudentsModalPageInfo',
+                'classStudentsModalPrevBtn',
+                'classStudentsModalNextBtn',
+                currentStudentModalPage,
+                (item, index, startIndex) => {
+                    const rowNumber = startIndex + index + 1;
+                    return `<tr><td>${rowNumber}</td><td>${escapeHtml(item.nama)}</td><td>${escapeHtml(item.nim)}</td></tr>`;
+                },
+                '<tr><td colspan="3" style="text-align:center; color:#64748b;">Belum ada mahasiswa di kelas ini.</td></tr>',
+                studentModalPageSize
+            );
+        }
+
+        function changeClassStudentsModalPage(direction) {
+            currentStudentModalPage += direction;
+            renderClassStudentsModalBody();
+        }
+
+        function setClassStudentsModalLoading(message) {
+            const body = document.getElementById('classStudentsModalBody');
+            const pageInfo = document.getElementById('classStudentsModalPageInfo');
+            const prevBtn = document.getElementById('classStudentsModalPrevBtn');
+            const nextBtn = document.getElementById('classStudentsModalNextBtn');
+
+            body.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#64748b;">${escapeHtml(message)}</td></tr>`;
+            pageInfo.textContent = 'Page 1 / 1';
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+        }
+
+        function setClassStudentsModalError(message) {
+            const body = document.getElementById('classStudentsModalBody');
+            const pageInfo = document.getElementById('classStudentsModalPageInfo');
+            const prevBtn = document.getElementById('classStudentsModalPrevBtn');
+            const nextBtn = document.getElementById('classStudentsModalNextBtn');
+
+            body.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#dc2626;">${escapeHtml(message)}</td></tr>`;
+            pageInfo.textContent = 'Page 1 / 1';
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+        }
+
+        function reloadClassStudentsModal() {
+            if (!currentStudentModalClassId) {
+                return Promise.resolve();
+            }
+
+            setClassStudentsModalLoading('Memuat data mahasiswa...');
+
+            return fetch('api_master_data.php?action=list_students_by_class&class_id=' + encodeURIComponent(currentStudentModalClassId))
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Gagal memuat mahasiswa kelas');
+                    }
+
+                    const rows = res.data || [];
+                    currentStudentModalRows = rows;
+                    currentStudentModalPage = 1;
+                    document.getElementById('classStudentsModalTitle').textContent = `Mahasiswa ${res.class.name}`;
+                    document.getElementById('classStudentsModalInfo').textContent = `${rows.length} mahasiswa aktif di kelas ini`;
+                    renderClassStudentsModalBody();
+                })
+                .catch(error => {
+                    setClassStudentsModalError(error.message);
+                    showToast(error.message, 'error');
+                });
+        }
+
+        function openClassStudentsModal(classId) {
+            const classRow = getClassRowById(classId);
+            if (!classRow) {
+                showToast('Data kelas tidak ditemukan', 'error');
+                return;
+            }
+
+            currentStudentModalClassId = classId;
+            document.getElementById('classStudentsModalTitle').textContent = `Mahasiswa ${classRow.name}`;
+            document.getElementById('classStudentsModalInfo').textContent = 'Memuat data mahasiswa...';
+            document.getElementById('classStudentsModal').classList.add('show');
+            reloadClassStudentsModal();
+        }
+
+        function addStudentManually() {
+            if (!currentStudentModalClassId) {
+                showToast('Pilih kelas terlebih dahulu', 'error');
+                return;
+            }
+
+            const classRow = getClassRowById(currentStudentModalClassId);
+            const name = prompt(`Nama mahasiswa baru untuk kelas ${classRow ? classRow.name : ''}:`, '');
+            if (name === null) {
+                return;
+            }
+
+            const normalizedName = name.trim();
+            if (!normalizedName) {
+                showToast('Nama mahasiswa wajib diisi', 'error');
+                return;
+            }
+
+            const nim = prompt('NIM mahasiswa baru:', '');
+            if (nim === null) {
+                return;
+            }
+
+            const normalizedNim = nim.trim();
+            if (!normalizedNim) {
+                showToast('NIM mahasiswa wajib diisi', 'error');
+                return;
+            }
+
+            fetch('api_master_data.php?action=create_student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    class_id: currentStudentModalClassId,
+                    name: normalizedName,
+                    nim: normalizedNim
+                })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Tambah mahasiswa gagal');
+                    }
+
+                    return Promise.all([
+                        loadOverview(true),
+                        reloadClassStudentsModal()
+                    ]).then(() => showToast(`Mahasiswa ditambahkan: ${res.data.nama}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
         }
 
         function loadOverview(silent = false) {
@@ -298,6 +556,7 @@ session_start();
                     subjectPage = 1;
                     renderClassTable();
                     renderSubjectTable();
+                    renderStudentImportClassOptions(document.getElementById('studentImportClass').value || '');
 
                     if (!silent) {
                         showToast('Master data berhasil dimuat');
@@ -346,14 +605,100 @@ session_start();
                 .catch(error => showToast(error.message, 'error'));
         }
 
+        function editClass(classId) {
+            const classRow = getClassRowById(classId);
+            if (!classRow) {
+                showToast('Data kelas tidak ditemukan', 'error');
+                return;
+            }
+
+            const nextName = prompt('Nama kelas baru:', classRow.name || '');
+            if (nextName === null) {
+                return;
+            }
+
+            const normalizedName = nextName.trim();
+            if (!normalizedName) {
+                showToast('Nama kelas wajib diisi', 'error');
+                return;
+            }
+
+            const nextCode = prompt('Kode kelas baru:', classRow.code || normalizedName);
+            if (nextCode === null) {
+                return;
+            }
+
+            fetch('api_master_data.php?action=update_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    class_id: classId,
+                    name: normalizedName,
+                    code: nextCode.trim() || normalizedName
+                })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Edit kelas gagal');
+                    }
+
+                    return loadOverview(true).then(() => showToast(`Kelas diperbarui: ${res.data.name}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function deleteClass(classId) {
+            const classRow = getClassRowById(classId);
+            if (!classRow) {
+                showToast('Data kelas tidak ditemukan', 'error');
+                return;
+            }
+
+            const studentCount = Number(classRow.student_count || 0);
+            const message = studentCount > 0
+                ? `Hapus kelas ${classRow.name} beserta ${studentCount} mahasiswa di dalamnya? Tindakan ini tidak bisa dibatalkan.`
+                : `Hapus kelas ${classRow.name}?`;
+
+            if (!confirm(message)) {
+                return;
+            }
+
+            fetch('api_master_data.php?action=delete_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_id: classId })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Hapus kelas gagal');
+                    }
+
+                    const deletedStudents = Number(res.deleted_students || 0);
+                    return loadOverview(true).then(() => showToast(`Kelas dihapus: ${classRow.name}${deletedStudents > 0 ? `, ${deletedStudents} mahasiswa ikut dihapus` : ''}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
         function importStudents() {
             const input = document.getElementById('studentsCsv');
+            const classSelect = document.getElementById('studentImportClass');
+            const classId = classSelect.value || '';
             if (!input.files || !input.files.length) {
                 showToast('Pilih file CSV mahasiswa terlebih dahulu', 'error');
                 return;
             }
 
+            if (!classId) {
+                showToast('Pilih kelas tujuan import mahasiswa terlebih dahulu', 'error');
+                return;
+            }
+
+            const classRow = getClassRowById(classId);
+
             const formData = new FormData();
+            formData.append('class_id', classId);
             for (const file of input.files) {
                 formData.append('students_csv[]', file);
             }
@@ -365,7 +710,8 @@ session_start();
                         throw new Error(res.message || 'Import mahasiswa gagal');
                     }
 
-                    document.getElementById('studentsInfo').textContent = `Import ${res.stats.processed_files} file selesai: +${res.stats.created_students} baru, ${res.stats.updated_students} update, +${res.stats.created_classes} kelas`;
+                    const className = res.stats.class && res.stats.class.name ? res.stats.class.name : (classRow ? classRow.name : 'kelas terpilih');
+                    document.getElementById('studentsInfo').textContent = `Import ${res.stats.processed_files} file ke ${className} selesai: +${res.stats.created_students} baru, ${res.stats.updated_students} update`;
                     input.value = '';
                     return loadOverview(true).then(() => showToast(res.message));
                 })
@@ -399,14 +745,14 @@ session_start();
         }
 
         document.getElementById('studentsCsv').addEventListener('change', function() {
-            handleMasterCsvSelect(this, 'studentsInfo', 'Gunakan format `No, Nama, NIM, Kelas`. Bisa pilih lebih dari 1 file.');
+            handleMasterCsvSelect(this, 'studentsInfo', 'Gunakan format `No, Nama, NIM`. Bisa pilih lebih dari 1 file.');
         });
 
         document.getElementById('subjectsCsv').addEventListener('change', function() {
             handleMasterCsvSelect(this, 'subjectsInfo', 'Satu nama mata kuliah per baris. Bisa pilih lebih dari 1 file.');
         });
 
-        setupDragAndDrop('studentsDrop', 'studentsCsv', (input, files) => handleMasterCsvSelect(input, 'studentsInfo', 'Gunakan format `No, Nama, NIM, Kelas`. Bisa pilih lebih dari 1 file.', files));
+        setupDragAndDrop('studentsDrop', 'studentsCsv', (input, files) => handleMasterCsvSelect(input, 'studentsInfo', 'Gunakan format `No, Nama, NIM`. Bisa pilih lebih dari 1 file.', files));
         setupDragAndDrop('subjectsDrop', 'subjectsCsv', (input, files) => handleMasterCsvSelect(input, 'subjectsInfo', 'Satu nama mata kuliah per baris. Bisa pilih lebih dari 1 file.', files));
         loadOverview(true);
     </script>

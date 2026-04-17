@@ -451,22 +451,20 @@ function parseStudentCsvFile($filePath)
     fgetcsv($handle, 10000, ',');
 
     while (($row = fgetcsv($handle, 10000, ',')) !== false) {
-        if (!is_array($row) || count($row) < 4) {
+        if (!is_array($row) || count($row) < 3) {
             continue;
         }
 
         $nama = sanitizeMasterName($row[1] ?? '');
         $nim = sanitizeMasterName($row[2] ?? '');
-        $kelas = sanitizeMasterName($row[3] ?? '');
 
-        if ($nama === '' || $nim === '' || $kelas === '') {
+        if ($nama === '' || $nim === '') {
             continue;
         }
 
         $students[] = [
             'nama' => $nama,
             'nim' => $nim,
-            'tingkat' => $kelas,
         ];
     }
 
