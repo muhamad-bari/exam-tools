@@ -48,6 +48,44 @@ try {
         exit;
     }
 
+    if ($action === 'promote_class') {
+        ensurePostRequest();
+        $input = readJsonInput();
+        $classId = intval($input['class_id'] ?? 0);
+        $sourceClass = getClassById($db, $classId);
+        $targetClassData = calculateNextStructuredClass($sourceClass);
+
+        $db->beginTransaction();
+        try {
+            $targetClass = getOrCreateClass($db, $targetClassData['name']);
+
+            $updateStmt = $db->prepare('UPDATE master_students SET class_id = :target_class_id, updated_at = CURRENT_TIMESTAMP WHERE class_id = :source_class_id AND is_active = 1');
+            $updateStmt->execute([
+                ':target_class_id' => $targetClass['id'],
+                ':source_class_id' => $sourceClass['id'],
+            ]);
+
+            $movedStudents = $updateStmt->rowCount();
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $e;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Naik kelas selesai',
+            'data' => [
+                'source_class' => $sourceClass,
+                'target_class' => $targetClass,
+                'moved_students' => $movedStudents,
+            ],
+        ]);
+        exit;
+    }
+
     if ($action === 'import_classes') {
         ensurePostRequest();
         if (!isset($_FILES['classes_csv']) || $_FILES['classes_csv']['error'] !== 0) {
@@ -236,13 +274,15 @@ try {
 
 function getClassesWithCounts(PDO $db)
 {
-    $stmt = $db->query('SELECT c.id, c.code, c.name, COUNT(s.id) AS student_count FROM master_classes c LEFT JOIN master_students s ON s.class_id = c.id AND s.is_active = 1 GROUP BY c.id, c.code, c.name ORDER BY c.name ASC');
-    $rows = $stmt->fetchAll();
-    foreach ($rows as &$row) {
-        $row['id'] = (int) $row['id'];
-        $row['student_count'] = (int) $row['student_count'];
+    $stmt = $db->query('SELECT c.id, c.code, c.name, c.program_name, c.tingkat_number, c.semester_number, COUNT(s.id) AS student_count FROM master_classes c LEFT JOIN master_students s ON s.class_id = c.id AND s.is_active = 1 GROUP BY c.id, c.code, c.name, c.program_name, c.tingkat_number, c.semester_number ORDER BY c.name ASC');
+    $rows = [];
+
+    foreach ($stmt->fetchAll() as $row) {
+        $row = normalizeClassRow($row);
+        $row['student_count'] = (int) ($row['student_count'] ?? 0);
+        $rows[] = $row;
     }
-    unset($row);
+
     return $rows;
 }
 
@@ -265,13 +305,14 @@ function findClassByCodeOrName(PDO $db, $code, $name)
         return null;
     }
 
-    $stmt = $db->prepare('SELECT id, code, name FROM master_classes WHERE code = :code OR LOWER(name) = LOWER(:name) LIMIT 1');
+    $stmt = $db->prepare('SELECT id, code, name, program_name, tingkat_number, semester_number FROM master_classes WHERE code = :code OR LOWER(name) = LOWER(:name) LIMIT 1');
     $stmt->execute([
         ':code' => $code,
         ':name' => $name,
     ]);
 
-    return $stmt->fetch() ?: null;
+    $row = $stmt->fetch();
+    return $row ? normalizeClassRow($row) : null;
 }
 
 function normalizeUploadedFiles($fileField)

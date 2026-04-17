@@ -95,10 +95,11 @@ session_start();
                     <div class="stat"><strong id="subjectCount">0</strong><span class="muted">Total mata kuliah</span></div>
                 </div>
                 <h2>Daftar Kelas</h2>
+                <p class="muted" style="margin:0 0 10px;">Fitur `Naik Kelas` mengikuti pola semester: ganjil ke genap tetap tingkat, genap ke ganjil berikutnya otomatis naik tingkat.</p>
                 <div class="table-wrap" style="margin-bottom:18px;">
                     <table>
-                        <thead><tr><th>Kelas</th><th>Kode</th><th>Mahasiswa</th></tr></thead>
-                        <tbody id="classBody"><tr><td colspan="3" style="text-align:center; color:#64748b;">Belum ada data kelas.</td></tr></tbody>
+                        <thead><tr><th>Kelas</th><th>Kode</th><th>Mahasiswa</th><th>Naik Ke</th><th>Aksi</th></tr></thead>
+                        <tbody id="classBody"><tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada data kelas.</td></tr></tbody>
                     </table>
                     <div class="table-pagination">
                         <span class="table-pagination-info" id="classPageInfo">Page 1 / 1</span>
@@ -236,9 +237,20 @@ session_start();
                 'classPrevBtn',
                 'classNextBtn',
                 classPage,
-                item => `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.code)}</td><td>${escapeHtml(item.student_count)}</td></tr>`,
-                '<tr><td colspan="3" style="text-align:center; color:#64748b;">Belum ada data kelas.</td></tr>'
+                item => {
+                    const canPromote = !!item.next_class_name;
+                    const promoteLabel = canPromote ? escapeHtml(item.next_class_name) : '<span style="color:#94a3b8;">Format belum dikenali</span>';
+                    const actionButton = canPromote
+                        ? `<button type="button" class="pager-btn" style="background:#2563eb; color:#fff;" onclick="promoteClass(${Number(item.id)})">Naik Kelas</button>`
+                        : '<span style="color:#94a3b8; font-size:0.8rem;">Tidak tersedia</span>';
+                    return `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.code)}</td><td>${escapeHtml(item.student_count)}</td><td>${promoteLabel}</td><td>${actionButton}</td></tr>`;
+                },
+                '<tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada data kelas.</td></tr>'
             );
+        }
+
+        function getClassRowById(classId) {
+            return allClassRows.find(item => String(item.id) === String(classId)) || null;
         }
 
         function renderSubjectTable() {
@@ -290,6 +302,46 @@ session_start();
                     if (!silent) {
                         showToast('Master data berhasil dimuat');
                     }
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function promoteClass(classId) {
+            const classRow = getClassRowById(classId);
+            if (!classRow) {
+                showToast('Data kelas tidak ditemukan', 'error');
+                return;
+            }
+
+            if (!classRow.next_class_name) {
+                showToast('Format kelas belum mendukung naik kelas otomatis', 'error');
+                return;
+            }
+
+            const studentCount = Number(classRow.student_count || 0);
+            const message = studentCount > 0
+                ? `Pindahkan ${studentCount} mahasiswa aktif dari ${classRow.name} ke ${classRow.next_class_name}?`
+                : `Kelas ${classRow.name} belum punya mahasiswa aktif. Tetap buat atau sinkronkan kelas tujuan ${classRow.next_class_name}?`;
+
+            if (!confirm(message)) {
+                return;
+            }
+
+            fetch('api_master_data.php?action=promote_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_id: classId })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Naik kelas gagal');
+                    }
+
+                    const movedStudents = Number(res.data && res.data.moved_students ? res.data.moved_students : 0);
+                    return loadOverview(true).then(() => {
+                        showToast(`Naik kelas selesai: ${movedStudents} mahasiswa dipindahkan ke ${res.data.target_class.name}`);
+                    });
                 })
                 .catch(error => showToast(error.message, 'error'));
         }
