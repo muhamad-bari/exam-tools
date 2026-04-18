@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../../bootstrap.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -7,7 +8,8 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Master Data - Exam Tools</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="assets/css/core/base.css">
+    <link rel="stylesheet" href="assets/css/components/layout.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { overflow: auto; background: #f3f6fa; }
@@ -56,7 +58,7 @@ session_start();
     </style>
 </head>
 <body>
-    <?php include 'navbar.php'; ?>
+    <?php require_once PROJECT_ROOT . '/app/shared/layout/navbar.php'; ?>
     <div id="toast-container"></div>
     <div class="page">
         <div class="grid">
@@ -184,6 +186,7 @@ session_start();
             </div>
         </div>
     </div>
+    <script src="assets/js/shared/utils.js"></script>
     <script>
         const pageSize = 5;
         const studentModalPageSize = 10;
@@ -364,7 +367,7 @@ session_start();
                 return;
             }
 
-            fetch('api_master_data.php?action=create_class', {
+                fetch('index.php?api=master_data&action=create_class', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, code })
@@ -448,7 +451,7 @@ session_start();
 
             setClassStudentsModalLoading('Memuat data mahasiswa...');
 
-            return fetch('api_master_data.php?action=list_students_by_class&class_id=' + encodeURIComponent(currentStudentModalClassId))
+            return fetch('index.php?api=master_data&action=list_students_by_class&class_id=' + encodeURIComponent(currentStudentModalClassId))
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {
@@ -511,7 +514,7 @@ session_start();
                 return;
             }
 
-            fetch('api_master_data.php?action=create_student', {
+            fetch('index.php?api=master_data&action=create_student', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -535,7 +538,7 @@ session_start();
         }
 
         function loadOverview(silent = false) {
-            return fetch('api_master_data.php?action=list_all')
+            return fetch('index.php?api=master_data&action=list_all')
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {
@@ -586,7 +589,7 @@ session_start();
                 return;
             }
 
-            fetch('api_master_data.php?action=promote_class', {
+            fetch('index.php?api=master_data&action=promote_class', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ class_id: classId })
@@ -628,7 +631,7 @@ session_start();
                 return;
             }
 
-            fetch('api_master_data.php?action=update_class', {
+            fetch('index.php?api=master_data&action=update_class', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -664,7 +667,7 @@ session_start();
                 return;
             }
 
-            fetch('api_master_data.php?action=delete_class', {
+            fetch('index.php?api=master_data&action=delete_class', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ class_id: classId })
@@ -703,7 +706,7 @@ session_start();
                 formData.append('students_csv[]', file);
             }
 
-            fetch('api_master_data.php?action=import_students', { method: 'POST', body: formData })
+            fetch('index.php?api=master_data&action=import_students', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {
@@ -730,7 +733,7 @@ session_start();
                 formData.append('subjects_csv[]', file);
             }
 
-            fetch('api_master_data.php?action=import_subjects', { method: 'POST', body: formData })
+            fetch('index.php?api=master_data&action=import_subjects', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {

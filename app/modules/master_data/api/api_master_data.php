@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../../bootstrap.php';
+
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/lib/database.php';
+require_once PROJECT_ROOT . '/app/shared/lib/database.php';
 
 try {
     $db = getDatabaseConnection();

@@ -5,6 +5,8 @@
  */
 
 // Prevent any output before sending headers
+require_once __DIR__ . '/../../../bootstrap.php';
+
 ob_start();
 
 // Prevent any PHP warning/notice from being output
@@ -26,20 +28,18 @@ try {
     }
 
     // Check if vendor/autoload.php exists
-    if (!file_exists('vendor/autoload.php')) {
+    if (!file_exists(PROJECT_ROOT . '/vendor/autoload.php')) {
         throw new Exception('Missing vendor/autoload.php - Jalankan "composer install" di root folder');
     }
 
-    require_once "vendor/autoload.php";
-    use Dompdf\Dompdf;
-    use Dompdf\Options;
+    require_once PROJECT_ROOT . '/vendor/autoload.php';
 
     // Check if phpqrcode library exists
-    if (!file_exists('phpqrcode/qrlib.php')) {
+    if (!file_exists(PROJECT_ROOT . '/phpqrcode/qrlib.php')) {
         throw new Exception('Missing phpqrcode/qrlib.php - File library tidak ditemukan');
     }
     
-    require_once "phpqrcode/qrlib.php";
+    require_once PROJECT_ROOT . '/phpqrcode/qrlib.php';
 
     // 1. Process Logo
     $logoData = null;
@@ -150,8 +150,6 @@ try {
     if (empty($students)) {
         throw new Exception('File CSV tidak memiliki data mahasiswa yang valid! Baris harus memiliki format: No, NIM, Nama, Kelas');
     }
-
-    require_once "phpqrcode/qrlib.php";
 
     // Helper function to render a single card
     function renderCard($student, $logoData, $headerLine1, $headerLine2, $subTitle, $jadwal, $penandaTangan) {
@@ -287,11 +285,11 @@ try {
     </html>';
 
     // Generate PDF
-    $options = new Options();
+    $options = new \Dompdf\Options();
     $options->set('isRemoteEnabled', true);
     
     ob_start(); // Buffer PDF generation in case of warnings
-    $dompdf = new Dompdf($options);
+    $dompdf = new \Dompdf\Dompdf($options);
     $dompdf->loadHtml($html);
     $dompdf->setPaper('A4', 'portrait');
     $dompdf->render();

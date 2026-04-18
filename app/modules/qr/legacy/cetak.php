@@ -1,6 +1,7 @@
 <?php
-include "phpqrcode/qrlib.php";
-include "pdf/fpdf.php";
+require_once __DIR__ . '/../../../bootstrap.php';
+require_once PROJECT_ROOT . '/phpqrcode/qrlib.php';
+require_once PROJECT_ROOT . '/pdf/fpdf.php';
 
 $csv = fopen($_FILES["filecsv"]["tmp_name"],'r');
 $header = fgetcsv($csv,"10000",",");

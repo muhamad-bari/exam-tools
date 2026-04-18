@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../../bootstrap.php';
 ini_set('memory_limit', '512M');
 set_time_limit(300);
 ?>
@@ -9,7 +10,8 @@ set_time_limit(300);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generator Jadwal - Exam Tools</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="assets/css/core/base.css">
+    <link rel="stylesheet" href="assets/css/components/layout.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
@@ -321,12 +323,12 @@ set_time_limit(300);
     </style>
 </head>
 <body>
-    <?php include 'navbar.php'; ?>
+    <?php require_once PROJECT_ROOT . '/app/shared/layout/navbar.php'; ?>
     <div id="toast-container"></div>
 
     <div class="split-container">
         <div class="left-panel">
-            <form action="generate_pdf_api.php" method="post" enctype="multipart/form-data" id="scheduleForm">
+            <form action="index.php?api=generate_pdf" method="post" enctype="multipart/form-data" id="scheduleForm">
                 <input type="hidden" name="generate_pdf" value="true">
                 <input type="hidden" name="existing_logo_data" id="existing_logo_data">
 
@@ -523,6 +525,7 @@ set_time_limit(300);
         </div>
     </div>
 
+    <script src="assets/js/shared/utils.js"></script>
     <script>
         let currentSessionId = null;
         let allSessions = [];
@@ -780,7 +783,7 @@ set_time_limit(300);
             if (!name || !name.trim()) {
                 return;
             }
-            fetch('api_master_data.php?action=create_subject', {
+            fetch('index.php?api=master_data&action=create_subject', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name.trim() })
@@ -803,7 +806,7 @@ set_time_limit(300);
         }
 
         function loadMasterData(silent = false) {
-            return fetch('api_master_data.php?action=list_all')
+            return fetch('index.php?api=master_data&action=list_all')
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {
@@ -845,7 +848,7 @@ set_time_limit(300);
                 updatePreview();
                 return;
             }
-            fetch('api_master_data.php?action=list_students_by_class&class_id=' + encodeURIComponent(classId))
+            fetch('index.php?api=master_data&action=list_students_by_class&class_id=' + encodeURIComponent(classId))
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {
@@ -980,7 +983,7 @@ set_time_limit(300);
             btn.disabled = true;
             const originalText = btnText.innerHTML;
             btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
-            fetch('generate_pdf_api.php', { method: 'POST', body: formData })
+            fetch('index.php?api=generate_pdf', { method: 'POST', body: formData })
                 .then(async response => {
                     const contentType = response.headers.get('content-type') || '';
                     const payload = contentType.includes('application/json') ? await response.json() : null;
@@ -1045,7 +1048,7 @@ set_time_limit(300);
                     ruang: inputsRuang[i].value
                 });
             }
-            fetch('api_sessions.php?action=save', {
+            fetch('index.php?api=sessions&action=save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1136,7 +1139,7 @@ set_time_limit(300);
         }
 
         function fetchSessions() {
-            fetch('api_sessions.php?action=list')
+            fetch('index.php?api=sessions&action=list')
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success) {
@@ -1168,7 +1171,7 @@ set_time_limit(300);
         function createFolder() {
             const name = prompt('Enter new folder name:');
             if (!name || !name.trim()) return;
-            fetch('api_sessions.php?action=create_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) })
+            fetch('index.php?api=sessions&action=create_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Folder created'); })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -1176,7 +1179,7 @@ set_time_limit(300);
         function createSubfolder(parentId) {
             const name = prompt('Enter new subfolder name:');
             if (!name || !name.trim()) return;
-            fetch('api_sessions.php?action=create_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), parent_id: parentId }) })
+            fetch('index.php?api=sessions&action=create_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), parent_id: parentId }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Subfolder created'); })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -1184,14 +1187,14 @@ set_time_limit(300);
         function renameFolder(id, currentName) {
             const name = prompt('Rename folder:', currentName);
             if (name === null || !name.trim() || name === currentName) return;
-            fetch('api_sessions.php?action=rename_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: name.trim() }) })
+            fetch('index.php?api=sessions&action=rename_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: name.trim() }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Folder renamed'); })
                 .catch(error => showToast(error.message, 'error'));
         }
 
         function deleteFolder(id) {
             if (!confirm('Delete this folder? Sessions inside will be moved to No Folder.')) return;
-            fetch('api_sessions.php?action=delete_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+            fetch('index.php?api=sessions&action=delete_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Folder deleted'); })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -1332,7 +1335,7 @@ set_time_limit(300);
             const draggedEl = document.querySelector(`[data-type="${type}"][data-id="${id}"]`);
             if (draggedEl) draggedEl.style.opacity = '1';
             if (!type || !id) return;
-            fetch('api_sessions.php?action=move_item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id: parseInt(id, 10), target_id: targetFolderId === null ? null : targetFolderId }) })
+            fetch('index.php?api=sessions&action=move_item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id: parseInt(id, 10), target_id: targetFolderId === null ? null : targetFolderId }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -1344,7 +1347,7 @@ set_time_limit(300);
         }
 
         function loadSession(id) {
-            fetch('api_sessions.php?action=load&id=' + id)
+            fetch('index.php?api=sessions&action=load&id=' + id)
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) throw new Error(res.message || 'Gagal memuat session');
@@ -1359,7 +1362,7 @@ set_time_limit(300);
         function renameSession(id, currentName) {
             const name = prompt('Rename session:', currentName);
             if (name === null || !name.trim() || name === currentName) return;
-            fetch('api_sessions.php?action=rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
+            fetch('index.php?api=sessions&action=rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Session renamed'); })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -1367,14 +1370,14 @@ set_time_limit(300);
         function duplicateSession(id, currentName) {
             const name = prompt('Enter name for the duplicate session:', currentName + ' (Copy)');
             if (name === null || !name.trim()) return;
-            fetch('api_sessions.php?action=duplicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
+            fetch('index.php?api=sessions&action=duplicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); fetchSessions(); showToast('Session duplicated'); })
                 .catch(error => showToast(error.message, 'error'));
         }
 
         function deleteSession(id) {
             if (!confirm('Are you sure you want to delete this session?')) return;
-            fetch('api_sessions.php?action=delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+            fetch('index.php?api=sessions&action=delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
                 .then(r => r.json()).then(res => { if (!res.success) throw new Error(res.message); if (String(currentSessionId) === String(id)) currentSessionId = null; fetchSessions(); showToast('Session deleted'); })
                 .catch(error => showToast(error.message, 'error'));
         }

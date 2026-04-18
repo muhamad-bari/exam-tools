@@ -1,0 +1,15 @@
+.page {
+    padding: 24px;
+}
+
+.card {
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #dbe4ee;
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.muted {
+    color: #64748b;
+}

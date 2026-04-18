@@ -1,186 +1,85 @@
-# AGENTS.md
+# PROJECT KNOWLEDGE BASE
 
-Operational guidance for coding agents in `exam-tools`.
+**Generated:** 2026-04-18 07:18:12 (Asia/Jakarta)
+**Commit:** a3e0f5e
+**Branch:** master
 
-## 1) Project Overview
+## OVERVIEW
+Exam tools web app in plain PHP + HTML/CSS/vanilla JS with **single-entry root routing**.
+Root only keeps `index.php`; page/API flows are dispatched by query route:
+- Web pages: `index.php?route=<name>`
+- APIs: `index.php?api=<name>&action=<snake_case>` (for action-based APIs)
 
-- Stack: plain PHP + HTML + CSS + vanilla JS.
-- Package manager: Composer.
-- PDF library: `dompdf/dompdf`.
-- QR library: local `phpqrcode/qrlib.php`.
-- Data store: SQLite (`database.sqlite`) for session data.
-- Target PHP version (`composer.json`): `8.0.30`.
-- Main pages: `index.php` (QR generator), `jadwal.php` (schedule generator).
+## STRUCTURE
+```text
+exam-tools/
+├── index.php                    # Single web+API entry router
+├── app/
+│   ├── bootstrap.php            # PROJECT_ROOT + APP_ROOT constants
+│   ├── modules/                 # Feature modules (web/api/legacy)
+│   └── shared/                  # Shared lib/layout/templates
+├── assets/
+│   ├── css/{core,components}/   # Shared frontend styles
+│   └── js/shared/               # Shared JS helpers
+├── lib/                         # Compatibility wrappers to app/shared/lib
+├── phpqrcode/                   # Vendored QR library (do not refactor broadly)
+├── pdf/                         # Vendored FPDF bundle (do not refactor broadly)
+├── uploads/                     # Runtime input artifacts
+├── results/                     # Runtime output artifacts
+└── vendor/                      # Composer dependencies (do not edit)
+```
 
-## 2) Cursor / Copilot Rule Files
+## WHERE TO LOOK
+| Task | Location | Notes |
+|---|---|---|
+| Router/web+api dispatch | `index.php` | Defines `route` and `api` maps; 404 behavior lives here |
+| Schedule generator UI | `app/modules/schedule/web/jadwal.php` | Heavy inline JS + sessions + master-data integration |
+| Master data UI/API | `app/modules/master_data/{web,api}` | Class/student/subject lifecycle |
+| Session tree API | `app/modules/sessions/api/api_sessions.php` | `action` contract compatibility-sensitive |
+| Grade recap upload/API | `app/modules/grade_recap/{web,api}` | XLSX parse + normalization |
+| QR upload/download flow | `app/modules/qr/{web,api}` + `app/shared/lib/pdf_helper.php` | CSV parsing + PDF output |
+| Shared DB schema/helpers | `app/shared/lib/database.php` | SQLite schema and helper surface used across APIs |
 
-Checked paths:
+## CODE MAP
+| Symbol | Type | Location | Role |
+|---|---|---|---|
+| `getDatabaseConnection` | function | `app/shared/lib/database.php` | Canonical SQLite connector + schema bootstrap |
+| `initializeDatabaseSchema` | function | `app/shared/lib/database.php` | Idempotent table/index migration path |
+| `generatePDF` | function | `app/shared/lib/pdf_helper.php` | CSV-to-PDF helper for QR flow |
+| `renderCard` | function | `app/modules/schedule/api/api_generate_jadwal.php` | Card HTML renderer per student |
 
-- `.cursorrules`
-- `.cursor/rules/`
-- `.github/copilot-instructions.md`
+## CONVENTIONS (PROJECT-SPECIFIC)
+- API responses keep `success` and `message` shape for failures.
+- Action-based API keys are compatibility-sensitive (`action`, `folder_id`, etc.).
+- Use `PROJECT_ROOT` for include/path safety from module files.
+- SQLite changes are additive/idempotent (`CREATE TABLE IF NOT EXISTS`, guarded `ALTER`).
+- Composer platform currently pins PHP `8.4.20`.
 
-Current status: none exist in this repository.
-If added later, treat them as higher-priority local instructions.
+## ANTI-PATTERNS (THIS PROJECT)
+- Do not re-introduce extra root PHP entry files (root should stay single-entry).
+- Do not leak PHP notices/warnings into JSON API output.
+- Do not rename public query params or action names casually.
+- Do not edit `vendor/` or broad-refactor vendored `phpqrcode/` and `pdf/`.
+- Do not commit runtime artifacts from `uploads/` and `results/` unless requested.
 
-## 3) Setup and Local Run
-
-Run from repo root.
-
+## COMMANDS
 ```bash
 composer install
 php -S 127.0.0.1:8000
-```
-
-Open:
-
-- `http://127.0.0.1:8000/index.php`
-- `http://127.0.0.1:8000/jadwal.php`
-- `http://127.0.0.1:8000/test_api.php` (manual diagnostics)
-
-Notes:
-
-- XAMPP/Apache is also valid.
-- MySQL is not required for current features; sessions use SQLite.
-
-## 4) Build / Lint / Test Commands
-
-There is no formal build pipeline and no PHPUnit suite.
-Use syntax checks + smoke tests.
-
-### Preferred single test
-
-```bash
-php -l api_sessions.php
-```
-
-Use the same command for any changed PHP file.
-
-### Lint all PHP files (Bash)
-
-```bash
-for f in $(find . -name "*.php"); do php -l "$f" || exit 1; done
-```
-
-### Lint all PHP files (PowerShell)
-
-```powershell
-Get-ChildItem -Recurse -Filter *.php | ForEach-Object { php -l $_.FullName }
-```
-
-### Composer sanity check
-
-```bash
+php -l <changed-file.php>
 composer validate
+curl "http://127.0.0.1:8000/index.php?api=sessions&action=list"
+curl "http://127.0.0.1:8000/index.php?api=master_data&action=list_all"
+curl -i "http://127.0.0.1:8000/index.php?api=generate_pdf"
 ```
 
-### API smoke tests
+## HIERARCHY
+- `./app/AGENTS.md` — modular app architecture (modules/shared/bootstrap).
+- `./assets/AGENTS.md` — frontend asset organization conventions.
+- `./lib/AGENTS.md` — compatibility wrapper boundaries (`lib/*` -> `app/shared/lib/*`).
+- `./phpqrcode/AGENTS.md` — vendored QR boundaries.
+- `./pdf/AGENTS.md` — vendored FPDF boundaries.
 
-```bash
-curl "http://127.0.0.1:8000/api_sessions.php?action=list"
-curl -i "http://127.0.0.1:8000/generate_pdf_api.php"
-```
-
-Expected: non-POST request to `generate_pdf_api.php` returns JSON error.
-
-## 5) Single-Test Guidance for Agents
-
-When no unit tests exist, do one focused verification:
-
-1. `php -l <changed-file.php>`
-2. One relevant endpoint request (`curl`) for backend changes
-3. One browser flow for UI-only changes
-
-Minimum for backend edits:
-
-- Run `php -l` on each changed backend file.
-- Run one endpoint request for the changed code path.
-
-## 6) Code Style and Conventions
-
-Follow existing style in touched files. Avoid unrelated reformatting.
-
-### 6.1 Formatting
-
-- 4-space indentation in PHP.
-- Opening braces on same line (`if (...) {`).
-- Preserve file-local `elseif`/`else if` style.
-- Prefer short arrays `[]`.
-- Do not add `declare(strict_types=1);` unless requested globally.
-
-### 6.2 Imports and Includes
-
-- Put `require` / `require_once` near file top.
-- Prefer `__DIR__` for local includes.
-- Group `use` statements near top-level.
-- Avoid duplicate includes in one execution path.
-
-### 6.3 Naming
-
-- PHP variables/functions: `camelCase`.
-- API action keys/params: snake_case (`create_folder`, `folder_id`).
-- JS functions: `camelCase`.
-- Keep existing public API parameter names stable.
-
-### 6.4 Validation and Types
-
-- Validate request shape with `isset`, `is_array`, null/empty checks.
-- Normalize mixed values (`'0'`, `0`, `''`, `null`) before branching.
-- Cast numeric IDs with `intval()` when integer semantics are needed.
-- Guard required fields before processing files/DB writes.
-
-### 6.5 Error Handling
-
-- Set JSON `Content-Type` early in API endpoints.
-- Use top-level `try/catch` for handlers.
-- Return consistent error JSON (`success` + `message`).
-- Set HTTP status for failures (`400`/`500` as appropriate).
-- Prevent warnings/notices from leaking into JSON output.
-- Use output buffering carefully around PDF/QR generation.
-
-### 6.6 Database and Persistence
-
-- SQLite is canonical (`sqlite:database.sqlite`).
-- Use prepared statements for reads/writes.
-- Keep schema setup idempotent (`CREATE TABLE IF NOT EXISTS`, guarded `ALTER`).
-- Do not add MySQL-specific logic unless migration is requested.
-
-### 6.7 Security and Output Safety
-
-- Escape HTML output with `htmlspecialchars()`.
-- Sanitize uploaded filenames.
-- Validate upload MIME/type + size on client and server.
-- Parse CSV defensively; skip malformed/incomplete rows.
-
-### 6.8 Frontend Conventions
-
-- Keep vanilla JS (no framework introduction).
-- Reuse existing variables/tokens in `style.css` when possible.
-- Preserve existing UX patterns (toasts, drag-drop, session tree).
-
-## 7) File and Directory Notes
-
-- Generated/ignored: `uploads/`, `results/`, `vendor/`.
-- Do not edit `vendor/` directly.
-- Avoid committing generated PDFs/temp artifacts unless requested.
-
-## 8) Change Discipline
-
-- Make minimal, targeted changes.
-- Keep API contracts backward-compatible.
-- Avoid large inline JS rewrites unless necessary.
-- New API actions should follow existing `action` routing style.
-
-## 9) Quick Verification Matrix
-
-- `api_sessions.php` changes:
-  - `php -l api_sessions.php`
-  - `curl "http://127.0.0.1:8000/api_sessions.php?action=list"`
-- `generate_pdf_api.php` changes:
-  - `php -l generate_pdf_api.php`
-  - Manual run from `jadwal.php` upload + generate flow
-- `index.php` or `jadwal.php` changes:
-  - `php -l <changed-file>.php`
-  - Browser verification of affected interaction
-
-Update this file when tooling, CI, tests, or local agent rules are added.
+## NOTES
+- LSP symbol indexing is limited in this workspace; rely on grep/ast/read.
+- `app/shared/views/` currently exists but active navbar lives in `app/shared/layout/navbar.php`.

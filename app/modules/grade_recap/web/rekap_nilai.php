@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../../bootstrap.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -7,7 +8,8 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rekap Nilai - Exam Tools</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="assets/css/core/base.css">
+    <link rel="stylesheet" href="assets/css/components/layout.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { overflow: auto; background: linear-gradient(135deg, #eef4fb 0%, #f6f1ea 100%); }
@@ -53,7 +55,7 @@ session_start();
     </style>
 </head>
 <body>
-    <?php include 'navbar.php'; ?>
+    <?php require_once PROJECT_ROOT . '/app/shared/layout/navbar.php'; ?>
     <div id="toast-container"></div>
     <div class="page">
         <div class="grid">
@@ -130,6 +132,7 @@ session_start();
             </div>
         </div>
     </div>
+    <script src="assets/js/shared/utils.js"></script>
     <script>
         const pageSize = 10;
         let allGradeRows = [];
@@ -299,7 +302,7 @@ session_start();
             const formData = new FormData();
             formData.append('grades_file', input.files[0]);
 
-            fetch('api_rekap_nilai.php', { method: 'POST', body: formData })
+            fetch('index.php?api=rekap_nilai', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(res => {
                     if (!res.success) {

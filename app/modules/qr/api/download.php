@@ -1,15 +1,16 @@
 <?php
-require_once "lib/pdf_helper.php";
+require_once __DIR__ . '/../../../bootstrap.php';
+require_once PROJECT_ROOT . '/app/shared/lib/pdf_helper.php';
 
 $filenameRequest = isset($_GET['file']) ? $_GET['file'] : 'data.csv';
 
 // Sanitize filename strictly (basename only)
 $filenameRequest = basename($filenameRequest);
-$csvPath = 'uploads/' . $filenameRequest;
+$csvPath = PROJECT_ROOT . '/uploads/' . $filenameRequest;
 
 // Construct the expected PDF path
 $fileBaseName = pathinfo($filenameRequest, PATHINFO_FILENAME);
-$pdfPath = 'results/QR_' . $fileBaseName . '.pdf';
+$pdfPath = PROJECT_ROOT . '/results/QR_' . $fileBaseName . '.pdf';
 
 // 1. Check if PDF already exists
 if (file_exists($pdfPath)) {

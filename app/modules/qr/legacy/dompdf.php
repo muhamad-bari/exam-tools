@@ -1,7 +1,8 @@
 <?php
-require "vendor/autoload.php";
+require_once __DIR__ . '/../../../bootstrap.php';
+require_once PROJECT_ROOT . '/vendor/autoload.php';
 use Dompdf\Dompdf;
-include "phpqrcode/qrlib.php";
+require_once PROJECT_ROOT . '/phpqrcode/qrlib.php';
 
 
 $csv = fopen($_FILES["filecsv"]["tmp_name"],'r');
@@ -22,7 +23,7 @@ if (!is_dir($qrDir)) {
     mkdir($qrDir, 0777, true);
 }
 ob_start();
-include 'dompdf_dom.php';
+include PROJECT_ROOT . '/app/shared/templates/dompdf_dom.php';
 $html = ob_get_clean();
 
 $dompdf = new Dompdf();

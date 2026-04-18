@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../../bootstrap.php';
+
 header('Content-Type: application/json; charset=utf-8');
 http_response_code(200);
 
@@ -12,7 +14,7 @@ set_time_limit(300);
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-require_once __DIR__ . '/lib/database.php';
+require_once PROJECT_ROOT . '/app/shared/lib/database.php';
 
 try {
     session_start();
@@ -25,16 +27,16 @@ try {
         throw new RuntimeException('Missing generate_pdf parameter');
     }
 
-    if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+    if (!file_exists(PROJECT_ROOT . '/vendor/autoload.php')) {
         throw new RuntimeException('Vendor autoload not found');
     }
 
-    if (!file_exists(__DIR__ . '/phpqrcode/qrlib.php')) {
+    if (!file_exists(PROJECT_ROOT . '/phpqrcode/qrlib.php')) {
         throw new RuntimeException('PHPQRCode library not found');
     }
 
-    require_once __DIR__ . '/vendor/autoload.php';
-    require_once __DIR__ . '/phpqrcode/qrlib.php';
+    require_once PROJECT_ROOT . '/vendor/autoload.php';
+    require_once PROJECT_ROOT . '/phpqrcode/qrlib.php';
 
     $db = getDatabaseConnection();
 
