@@ -2,13 +2,23 @@
     <div class="stack">
         <div>
             <h1><i class="fa-solid fa-chart-column"></i> Rekap Nilai</h1>
-            <p class="muted">Upload file Excel `.xlsx` per kelas dan mata kuliah. Pilih mata kuliah dulu sebelum upload.</p>
+            <p class="muted">Upload satu atau banyak file Excel `.xlsx` per kelas dan mata kuliah. Pilih mata kuliah dulu sebelum upload.</p>
         </div>
         <div>
-            <label for="subjectSelect" class="muted" style="display:block; margin-bottom:8px; font-weight:600;">Mata Kuliah (wajib)</label>
-            <select id="subjectSelect" style="width:100%; border:1px solid #cfd8e3; border-radius:10px; padding:10px 12px; background:#fff;">
+            <label for="subjectSearchInput" class="muted" style="display:block; margin-bottom:8px; font-weight:600;">Mata Kuliah (wajib)</label>
+            <input
+                type="text"
+                id="subjectSearchInput"
+                list="subjectSearchList"
+                placeholder="Cari mata kuliah..."
+                autocomplete="off"
+                style="width:100%; border:1px solid #cfd8e3; border-radius:10px; padding:10px 12px; background:#fff;"
+            >
+            <datalist id="subjectSearchList"></datalist>
+            <select id="subjectSelect" style="display:none;" aria-hidden="true" tabindex="-1">
                 <option value="">-- Pilih mata kuliah --</option>
             </select>
+            <p id="subjectSearchInfo" class="muted" style="margin:8px 0 0; font-size:0.84rem;">Ketik nama mata kuliah lalu pilih dari daftar saran.</p>
         </div>
         <div>
             <label for="examTypeSelect" class="muted" style="display:block; margin-bottom:8px; font-weight:600;">Jenis Ujian (wajib)</label>
@@ -34,11 +44,14 @@
             <label class="drop" id="gradeDrop" for="gradeFile">
                 <strong>
                     <i class="fa-solid fa-file-excel"></i>
-                    <span>Pilih file Excel nilai</span>
-                    <span id="gradeFileInfo" class="muted">Format tetap: `Nama(B)`, `NIM(D)`, `B/S(G)`, `Nilai(J)`, `Kategori(K)`. Upload ulang akan memperbarui recap aktif untuk kombinasi mata kuliah + jenis ujian + tahun ajaran + periode + kelas yang sama.</span>
+                    <span>Pilih file Excel nilai (bisa multi-file)</span>
+                    <span id="gradeFileInfo" class="muted">Format tetap: `Nama(B)`, `NIM(D)`, `B/S(G)`, `Nilai(J)`, `Kategori(K)`. Bulk upload akan memproses semua file untuk kombinasi mata kuliah + jenis ujian + tahun ajaran + periode yang dipilih.</span>
                 </strong>
             </label>
-            <input type="file" id="gradeFile" accept=".xlsx" style="display:none;">
+            <input type="file" id="gradeFile" accept=".xlsx" multiple style="display:none;">
+            <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+                <button type="button" id="clearGradeFileBtn" class="btn gray" style="display:none; flex:0 0 auto;" onclick="removeSelectedGradeFiles()"><i class="fa-solid fa-trash"></i> Hapus File Terpilih</button>
+            </div>
         </div>
         <div class="actions">
             <button type="button" class="btn primary" onclick="uploadGradeRecap()" id="uploadBtn"><i class="fa-solid fa-upload"></i> Upload & Baca</button>

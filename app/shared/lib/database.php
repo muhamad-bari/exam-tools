@@ -157,6 +157,45 @@ function initializeDatabaseSchema(PDO $db)
     ensureColumnExists($db, 'grade_recap_results', 'term', 'TEXT DEFAULT NULL');
     ensureColumnExists($db, 'grade_recap_results', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
 
+    $db->exec("CREATE TABLE IF NOT EXISTS follow_up_statuses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        subject_id INTEGER NOT NULL,
+        exam_type TEXT NOT NULL DEFAULT 'UAS',
+        academic_year TEXT NOT NULL DEFAULT '',
+        term TEXT NOT NULL DEFAULT '',
+        follow_up_type TEXT NOT NULL,
+        class_id INTEGER DEFAULT NULL,
+        class_name_snapshot TEXT DEFAULT NULL,
+        source_import_id INTEGER DEFAULT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        follow_up_date TEXT DEFAULT NULL,
+        follow_up_score REAL DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES master_students(id),
+        FOREIGN KEY (subject_id) REFERENCES master_subjects(id),
+        FOREIGN KEY (class_id) REFERENCES master_classes(id),
+        FOREIGN KEY (source_import_id) REFERENCES grade_recap_imports(id)
+    )");
+
+    ensureColumnExists($db, 'follow_up_statuses', 'student_id', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'follow_up_statuses', 'subject_id', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'follow_up_statuses', 'exam_type', 'TEXT NOT NULL DEFAULT "UAS"');
+    ensureColumnExists($db, 'follow_up_statuses', 'academic_year', 'TEXT NOT NULL DEFAULT ""');
+    ensureColumnExists($db, 'follow_up_statuses', 'term', 'TEXT NOT NULL DEFAULT ""');
+    ensureColumnExists($db, 'follow_up_statuses', 'follow_up_type', 'TEXT NOT NULL DEFAULT "remedial"');
+    ensureColumnExists($db, 'follow_up_statuses', 'class_id', 'INTEGER DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'class_name_snapshot', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'source_import_id', 'INTEGER DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'status', 'TEXT NOT NULL DEFAULT "pending"');
+    ensureColumnExists($db, 'follow_up_statuses', 'follow_up_date', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'follow_up_score', 'REAL DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'notes', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'follow_up_statuses', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+    ensureColumnExists($db, 'follow_up_statuses', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+
     $db->exec('CREATE INDEX IF NOT EXISTS idx_sessions_folder_id ON sessions(folder_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_class_id ON master_students(class_id)');
@@ -171,6 +210,9 @@ function initializeDatabaseSchema(PDO $db)
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_subject_class_nim ON grade_recap_results(subject_id, class_name, nim)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_subject_exam_class ON grade_recap_results(subject_id, exam_type, class_name)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_period_scope ON grade_recap_results(subject_id, exam_type, academic_year, term, class_name)');
+    $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_follow_up_statuses_unique_scope ON follow_up_statuses(student_id, subject_id, exam_type, academic_year, term, follow_up_type)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_follow_up_statuses_class_scope ON follow_up_statuses(class_id, follow_up_type, status)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_follow_up_statuses_subject_scope ON follow_up_statuses(subject_id, exam_type, academic_year, term)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_academic_periods_year_term ON master_academic_periods(academic_year, term)');
 
     $db->exec("UPDATE grade_recap_imports SET exam_type = 'UAS' WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
@@ -178,6 +220,9 @@ function initializeDatabaseSchema(PDO $db)
     $db->exec("UPDATE grade_recap_results SET exam_type = COALESCE((SELECT i.exam_type FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id), 'UAS') WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
     $db->exec('UPDATE grade_recap_results SET academic_year = (SELECT i.academic_year FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE academic_year IS NULL OR TRIM(academic_year) = ""');
     $db->exec('UPDATE grade_recap_results SET term = (SELECT i.term FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE term IS NULL OR TRIM(term) = ""');
+    $db->exec("UPDATE follow_up_statuses SET exam_type = 'UAS' WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
+    $db->exec('UPDATE follow_up_statuses SET academic_year = "" WHERE academic_year IS NULL');
+    $db->exec('UPDATE follow_up_statuses SET term = "" WHERE term IS NULL');
 
     syncStructuredClassMetadata($db);
 }

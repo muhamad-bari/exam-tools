@@ -5,6 +5,9 @@ let assignSelectedNims = new Set();
 let assignFailedByNim = {};
 let currentImportId = null;
 let selectedSubject = null;
+let availableSubjects = [];
+let availableSubjectsById = new Map();
+let availableSubjectsByName = new Map();
 let selectedExamType = null;
 let selectedAcademicYear = null;
 let selectedTerm = null;
@@ -16,9 +19,33 @@ let storedFilters = {
 };
 
 function syncSelectedSubjectFromDom() {
+    const searchInput = document.getElementById('subjectSearchInput');
     const select = document.getElementById('subjectSelect');
     if (!select) {
         selectedSubject = null;
+        return selectedSubject;
+    }
+
+    if (searchInput) {
+        const normalizedName = String(searchInput.value || '').trim().toLowerCase();
+        if (!normalizedName) {
+            select.value = '';
+            selectedSubject = null;
+            return selectedSubject;
+        }
+
+        const subjectFromName = availableSubjectsByName.get(normalizedName) || null;
+        if (!subjectFromName) {
+            select.value = '';
+            selectedSubject = null;
+            return selectedSubject;
+        }
+
+        select.value = String(subjectFromName.id);
+        selectedSubject = {
+            id: Number(subjectFromName.id),
+            name: subjectFromName.name,
+        };
         return selectedSubject;
     }
 
@@ -34,6 +61,27 @@ function syncSelectedSubjectFromDom() {
     };
 
     return selectedSubject;
+}
+
+function setAvailableSubjects(subjects) {
+    availableSubjects = Array.isArray(subjects) ? subjects.slice() : [];
+    availableSubjectsById = new Map();
+    availableSubjectsByName = new Map();
+
+    availableSubjects.forEach((subject) => {
+        const id = Number(subject?.id || 0);
+        const name = String(subject?.name || '').trim();
+        if (!id || !name) {
+            return;
+        }
+
+        const normalized = {
+            id,
+            name,
+        };
+        availableSubjectsById.set(String(id), normalized);
+        availableSubjectsByName.set(name.toLowerCase(), normalized);
+    });
 }
 
 function syncSelectedExamTypeFromDom() {

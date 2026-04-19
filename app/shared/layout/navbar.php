@@ -26,5 +26,10 @@ $currentRoute = $_GET['route'] ?? 'qr';
                 <i class="fa-solid fa-chart-column"></i> Rekap Nilai
             </a>
         </li>
+        <li>
+            <a href="index.php?route=follow-up" class="<?= $currentRoute === 'follow-up' ? 'active' : '' ?>">
+                <i class="fa-solid fa-clipboard-check"></i> Remedial &amp; Susulan
+            </a>
+        </li>
     </ul>
 </nav>

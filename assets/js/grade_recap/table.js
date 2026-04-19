@@ -71,6 +71,11 @@ function resetGradeRecap() {
     selectedAcademicYear = null;
     selectedTerm = null;
     document.getElementById('subjectSelect').value = '';
+    const subjectSearchInput = document.getElementById('subjectSearchInput');
+    if (subjectSearchInput) {
+        subjectSearchInput.value = '';
+        delete subjectSearchInput.dataset.confirmedSubjectId;
+    }
     document.getElementById('examTypeSelect').value = '';
     renderUploadAcademicYearOptions('');
     renderUploadTermOptions('', '');

@@ -7,13 +7,34 @@ function loadSubjectOptions() {
             }
 
             const select = document.getElementById('subjectSelect');
+            const searchInput = document.getElementById('subjectSearchInput');
+            const searchList = document.getElementById('subjectSearchList');
             select.innerHTML = '<option value="">-- Pilih mata kuliah --</option>';
-            (res.data || []).forEach(subject => {
+            if (searchList) {
+                searchList.innerHTML = '';
+            }
+
+            const subjects = res.data || [];
+            setAvailableSubjects(subjects);
+
+            subjects.forEach(subject => {
                 const option = document.createElement('option');
                 option.value = String(subject.id);
                 option.textContent = subject.name;
                 select.appendChild(option);
+
+                if (searchList) {
+                    const datalistOption = document.createElement('option');
+                    datalistOption.value = subject.name;
+                    searchList.appendChild(datalistOption);
+                }
             });
+
+            if (searchInput) {
+                const selectedId = String(select.value || '');
+                const selectedOption = Array.from(select.options).find((option) => String(option.value) === selectedId);
+                searchInput.value = selectedOption ? selectedOption.textContent : '';
+            }
         });
 }
 
@@ -53,7 +74,9 @@ function setupDragAndDrop() {
         }
         try {
             const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(files[0]);
+            Array.from(files).forEach((file) => {
+                dataTransfer.items.add(file);
+            });
             input.files = dataTransfer.files;
         } catch (error) {
         }
@@ -61,29 +84,89 @@ function setupDragAndDrop() {
     }, false);
 }
 
+function getSelectedGradeFiles() {
+    const input = document.getElementById('gradeFile');
+    if (!input || !input.files) {
+        return [];
+    }
+    return Array.from(input.files);
+}
+
+function getDefaultGradeFileInfoText() {
+    return 'Format tetap: `Nama(B)`, `NIM(D)`, `B/S(G)`, `Nilai(J)`, `Kategori(K)`. Bulk upload akan memproses semua file untuk kombinasi mata kuliah + jenis ujian + tahun ajaran + periode yang dipilih.';
+}
+
+function updateClearGradeFileButtonState() {
+    const clearBtn = document.getElementById('clearGradeFileBtn');
+    if (!clearBtn) {
+        return;
+    }
+
+    clearBtn.style.display = getSelectedGradeFiles().length ? 'inline-flex' : 'none';
+}
+
+function clearSelectedGradeFiles(showToastMessage = false, toastMessage = 'File Excel terpilih sudah dibersihkan.') {
+    const input = document.getElementById('gradeFile');
+    if (!input) {
+        return false;
+    }
+
+    const hadFiles = getSelectedGradeFiles().length > 0;
+    if (!hadFiles) {
+        updateClearGradeFileButtonState();
+        return false;
+    }
+
+    input.value = '';
+    updateSelectedFileInfo();
+    updateClearGradeFileButtonState();
+
+    if (showToastMessage) {
+        showToast(toastMessage);
+    }
+
+    return true;
+}
+
+function removeSelectedGradeFiles() {
+    clearSelectedGradeFiles(true, 'File Excel terpilih berhasil dihapus.');
+}
+
 function updateSelectedFileInfo() {
     const input = document.getElementById('gradeFile');
     const info = document.getElementById('gradeFileInfo');
-    const file = input.files && input.files[0] ? input.files[0] : null;
+    const files = getSelectedGradeFiles();
 
-    if (!file) {
-        info.textContent = 'Format tetap: `Nama(B)`, `NIM(D)`, `B/S(G)`, `Nilai(J)`, `Kategori(K)`. Upload ulang akan memperbarui recap aktif untuk kombinasi mata kuliah + jenis ujian + tahun ajaran + periode + kelas yang sama.';
+    if (!files.length) {
+        info.textContent = getDefaultGradeFileInfoText();
+        updateClearGradeFileButtonState();
         return;
     }
 
-    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    const invalidFile = files.find((file) => !String(file.name || '').toLowerCase().endsWith('.xlsx'));
+    if (invalidFile) {
         showToast('File harus berformat .xlsx', 'error');
         input.value = '';
-        info.textContent = 'Format tetap: `Nama(B)`, `NIM(D)`, `B/S(G)`, `Nilai(J)`, `Kategori(K)`. Upload ulang akan memperbarui recap aktif untuk kombinasi mata kuliah + jenis ujian + tahun ajaran + periode + kelas yang sama.';
+        info.textContent = getDefaultGradeFileInfoText();
+        updateClearGradeFileButtonState();
         return;
     }
 
-    info.textContent = file.name;
+    if (files.length === 1) {
+        info.textContent = files[0].name;
+        updateClearGradeFileButtonState();
+        return;
+    }
+
+    const previewNames = files.slice(0, 3).map((file) => file.name);
+    const remaining = files.length - previewNames.length;
+    info.textContent = `${files.length} file dipilih: ${previewNames.join(', ')}${remaining > 0 ? `, +${remaining} file lain` : ''}`;
+    updateClearGradeFileButtonState();
 }
 
 function uploadGradeRecap() {
-    const input = document.getElementById('gradeFile');
-    if (!input.files || !input.files.length) {
+    const files = getSelectedGradeFiles();
+    if (!files.length) {
         showToast('Pilih file Excel nilai terlebih dahulu', 'error');
         return;
     }
@@ -94,7 +177,9 @@ function uploadGradeRecap() {
     const term = syncSelectedTermFromDom();
 
     const formData = new FormData();
-    formData.append('grades_file', input.files[0]);
+    files.forEach((file) => {
+        formData.append('grades_file[]', file);
+    });
     if (!subject) {
         showToast('Pilih mata kuliah dulu sebelum upload', 'error');
         return;
@@ -132,7 +217,10 @@ function uploadGradeRecap() {
             const resolvedExamType = res?.meta?.exam_type || examType || '-';
             const resolvedAcademicYear = res?.meta?.academic_year || academicYear || '-';
             const resolvedTerm = res?.meta?.term || term || '-';
-            document.getElementById('summaryInfo').textContent = `${res.meta.file_name} - ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) - Sheet ${res.meta.sheet_name} (valid: ${res.summary.total_rows || 0}, unik NIM: ${res.summary.unique_nim_rows || 0})`;
+            const uploadedCount = Number(res?.meta?.uploaded_file_count || files.length || 1);
+            const primaryFileName = res?.meta?.file_name || (files[0]?.name || 'nilai.xlsx');
+            const summaryFileText = uploadedCount > 1 ? `${uploadedCount} file (${primaryFileName} + lainnya)` : primaryFileName;
+            document.getElementById('summaryInfo').textContent = `${summaryFileText} - ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) - Sheet ${res.meta.sheet_name} (valid: ${res.summary.total_rows || 0}, unik NIM: ${res.summary.unique_nim_rows || 0})`;
             document.getElementById('detectedInfo').textContent = `Kolom tetap digunakan untuk sheet ${res.meta.sheet_name}. Upload terbaru akan menjadi recap aktif untuk ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) pada kelas yang sama.`;
             document.getElementById('totalRows').textContent = String(res.summary.total_rows || 0);
             document.getElementById('avgNormal').textContent = formatNumber(res.summary.avg_normal);

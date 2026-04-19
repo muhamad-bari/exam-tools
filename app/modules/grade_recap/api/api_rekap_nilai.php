@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__ . '/../../../bootstrap.php';
 
-header('Content-Type: application/json; charset=utf-8');
-ini_set('display_errors', '0');
-error_reporting(E_ALL & ~E_DEPRECATED);
+if (!defined('GRADE_RECAP_HELPERS_ONLY')) {
+    header('Content-Type: application/json; charset=utf-8');
+    ini_set('display_errors', '0');
+    error_reporting(E_ALL & ~E_DEPRECATED);
+}
 
 require_once PROJECT_ROOT . '/vendor/autoload.php';
 require_once PROJECT_ROOT . '/app/shared/lib/database.php';
@@ -13,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
+if (!defined('GRADE_RECAP_HELPERS_ONLY')) {
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $action = $_GET['action'] ?? '';
@@ -144,7 +147,8 @@ try {
 
     header('Content-Type: application/json; charset=utf-8');
 
-    if (!isset($_FILES['grades_file']) || ($_FILES['grades_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    $uploadedFiles = normalizeUploadedGradeFiles($_FILES['grades_file'] ?? null);
+    if (!$uploadedFiles) {
         throw new RuntimeException('File Excel nilai wajib diunggah');
     }
 
@@ -175,24 +179,11 @@ try {
 
     $subject = getSubjectById($db, $subjectId);
 
-    $uploadedFile = $_FILES['grades_file'];
-    $extension = strtolower(pathinfo($uploadedFile['name'] ?? '', PATHINFO_EXTENSION));
-    if ($extension !== 'xlsx') {
-        throw new RuntimeException('Format file harus .xlsx');
-    }
-
     validateSpreadsheetRuntime();
-
-    $reader = IOFactory::createReader('Xlsx');
-    $reader->setReadDataOnly(true);
-    $spreadsheet = $reader->load($uploadedFile['tmp_name']);
-    $sheet = $spreadsheet->getSheet(0);
-    $sheetName = $sheet->getTitle();
-    $rows = $sheet->toArray(null, true, true, false);
-
     $studentLookup = loadStudentLookupByNim($db);
-
-    $stats = [
+    $combinedRowsByNim = [];
+    $uploadedFileMeta = [];
+    $aggregateStats = [
         'source_rows' => 0,
         'valid_rows' => 0,
         'invalid_rows' => 0,
@@ -204,250 +195,97 @@ try {
         ],
     ];
 
-    $aggregatedByNim = [];
-
-    for ($index = 1; $index < count($rows); $index++) {
-        $row = $rows[$index] ?? [];
-
-        $nim = sanitizeGradeCell($row[3] ?? ''); // D
-        $sourceName = sanitizeGradeCell($row[1] ?? ''); // B
-        $bsText = sanitizeBsCell($row[6] ?? ''); // G
-        $score = normalizeGradeNumber($row[9] ?? null); // J
-        $categoryMarker = strtoupper(sanitizeGradeCell($row[10] ?? '')); // K
-
-        if ($nim === '' && $sourceName === '' && $bsText === '' && $score === null && $categoryMarker === '') {
-            continue;
+    $db->beginTransaction();
+    foreach ($uploadedFiles as $fileIndex => $uploadedFile) {
+        try {
+            $processed = processUploadedGradeRecapFile($uploadedFile, $studentLookup);
+        } catch (Throwable $fileError) {
+            $fileName = sanitizeGradeCell($uploadedFile['name'] ?? '') ?: ('file-' . ($fileIndex + 1));
+            throw new RuntimeException('Gagal memproses file #' . ($fileIndex + 1) . ' (' . $fileName . '): ' . $fileError->getMessage(), 0, $fileError);
         }
 
-        $stats['source_rows']++;
+        $fileImportId = persistProcessedGradeRecapFile($db, [
+            'subject_id' => $subjectId,
+            'exam_type' => $examType,
+            'academic_year' => $academicYear,
+            'term' => $term,
+        ], $processed);
 
-        $category = resolveAssessmentCategory($categoryMarker);
-        if ($nim === '' || $score === null || $category === null) {
-            $stats['invalid_rows']++;
-            continue;
-        }
-
-        $nimKey = 'nim:' . $nim;
-
-        if (!isset($aggregatedByNim[$nimKey])) {
-            $aggregatedByNim[$nimKey] = [
-                'nim' => $nim,
-                'source_name' => $sourceName,
-                'normal_bs' => null,
-                'normal_score' => null,
-                'normal_letter' => null,
-                'remedial_bs' => null,
-                'remedial_score' => null,
-                'remedial_letter' => null,
-                'susulan_bs' => null,
-                'susulan_score' => null,
-                'susulan_letter' => null,
-                'final_score' => null,
-                'final_letter' => null,
-                'duplicate_nim_count' => 0,
-                '_seen_rows' => 0,
-            ];
-        }
-
-        $record = &$aggregatedByNim[$nimKey];
-        if ($record['_seen_rows'] > 0) {
-            $record['duplicate_nim_count']++;
-            $stats['duplicate_nim_rows']++;
-        }
-        $record['_seen_rows']++;
-
-        $stats['valid_rows']++;
-        $stats['category_rows'][$category]++;
-
-        applyCategoryScore($record, $category, $score, $bsText);
-    }
-
-    $classCounts = [];
-    $normalValues = [];
-    $remedialValues = [];
-    $susulanValues = [];
-    $finalValues = [];
-    $matchedStudents = 0;
-    $resultRows = [];
-
-    foreach ($aggregatedByNim as $record) {
-        $nim = (string) ($record['nim'] ?? '');
-        $record['final_score'] = maxScore($record['normal_score'], $record['remedial_score'], $record['susulan_score']);
-        $record['final_bs'] = resolveFinalBs($record);
-        $record['final_letter'] = scoreToLetter($record['final_score']);
-
-        $masterStudent = $studentLookup[$nim] ?? null;
-        if ($masterStudent !== null) {
-            $matchedStudents++;
-        }
-
-        $name = $masterStudent['name'] ?? $record['source_name'];
-        $className = $masterStudent['class_name'] ?? '';
-
-        if ($record['normal_score'] !== null) {
-            $normalValues[] = $record['normal_score'];
-        }
-        if ($record['remedial_score'] !== null) {
-            $remedialValues[] = $record['remedial_score'];
-        }
-        if ($record['susulan_score'] !== null) {
-            $susulanValues[] = $record['susulan_score'];
-        }
-        if ($record['final_score'] !== null) {
-            $finalValues[] = $record['final_score'];
-        }
-
-        $effectiveClass = $className !== '' ? $className : 'Tanpa kelas';
-        if (!isset($classCounts[$effectiveClass])) {
-            $classCounts[$effectiveClass] = 0;
-        }
-        $classCounts[$effectiveClass]++;
-
-        unset($record['_seen_rows']);
-
-        $resultRows[] = [
-            'nim' => $nim,
-            'nama' => $name,
-            'source_name' => $record['source_name'],
-            'kelas' => $className,
-            'master_class' => $className,
-            'normal_bs' => $record['normal_bs'],
-            'normal_score' => $record['normal_score'],
-            'normal_letter' => $record['normal_letter'],
-            'remedial_bs' => $record['remedial_bs'],
-            'remedial_score' => $record['remedial_score'],
-            'remedial_letter' => $record['remedial_letter'],
-            'susulan_bs' => $record['susulan_bs'],
-            'susulan_score' => $record['susulan_score'],
-            'susulan_letter' => $record['susulan_letter'],
-            'final_score' => $record['final_score'],
-            'final_letter' => $record['final_letter'],
-            'duplicate_nim_count' => $record['duplicate_nim_count'],
-            'final_bs' => $record['final_bs'],
-            'matched_master' => $masterStudent !== null,
-            'student_id' => $masterStudent['id'] ?? null,
+        $uploadedFileMeta[] = [
+            'file_name' => $processed['file_name'],
+            'sheet_name' => $processed['sheet_name'],
+            'import_id' => $fileImportId,
+            'summary' => [
+                'total_rows' => $processed['summary']['total_rows'],
+                'unique_nim_rows' => $processed['summary']['unique_nim_rows'],
+            ],
         ];
+
+        $aggregateStats['source_rows'] += (int) ($processed['summary']['source_rows'] ?? 0);
+        $aggregateStats['valid_rows'] += (int) ($processed['summary']['valid_rows'] ?? 0);
+        $aggregateStats['invalid_rows'] += (int) ($processed['summary']['invalid_rows'] ?? 0);
+        $aggregateStats['duplicate_nim_rows'] += (int) ($processed['summary']['duplicate_nim_rows'] ?? 0);
+        $aggregateStats['category_rows']['normal'] += (int) ($processed['summary']['category_rows']['normal'] ?? 0);
+        $aggregateStats['category_rows']['remedial'] += (int) ($processed['summary']['category_rows']['remedial'] ?? 0);
+        $aggregateStats['category_rows']['susulan'] += (int) ($processed['summary']['category_rows']['susulan'] ?? 0);
+
+        foreach ($processed['data'] as $row) {
+            $nim = (string) ($row['nim'] ?? '');
+            if ($nim === '') {
+                continue;
+            }
+
+            if (!isset($combinedRowsByNim[$nim])) {
+                $combinedRowsByNim[$nim] = $row;
+                continue;
+            }
+
+            $aggregateStats['duplicate_nim_rows']++;
+            $combinedRowsByNim[$nim] = mergeBulkRecapRow($combinedRowsByNim[$nim], $row);
+        }
     }
 
-    usort($resultRows, static function ($a, $b) {
-        return strcmp($a['nim'], $b['nim']);
+    $combinedRows = array_values($combinedRowsByNim);
+    usort($combinedRows, static function ($a, $b) {
+        return strcmp((string) ($a['nim'] ?? ''), (string) ($b['nim'] ?? ''));
     });
 
-    $rawResultCount = count($resultRows);
-    if ($resultRows) {
-        $uniqueRows = [];
-        foreach ($resultRows as $row) {
-            $uniqueRows[$row['nim']] = $row;
-        }
-        $resultRows = array_values($uniqueRows);
-    }
+    $derivedSummary = buildRecapResponseSummary($combinedRows, $aggregateStats);
+    $activeImportId = $uploadedFileMeta ? (int) ($uploadedFileMeta[count($uploadedFileMeta) - 1]['import_id'] ?? 0) : null;
+    $activeFileName = $uploadedFileMeta ? (string) ($uploadedFileMeta[count($uploadedFileMeta) - 1]['file_name'] ?? 'nilai.xlsx') : 'nilai.xlsx';
+    $activeSheetName = $uploadedFileMeta ? (string) ($uploadedFileMeta[count($uploadedFileMeta) - 1]['sheet_name'] ?? '-') : '-';
 
-    $dedupedDiff = $rawResultCount - count($resultRows);
-    if ($dedupedDiff > 0) {
-        $stats['duplicate_nim_rows'] += $dedupedDiff;
-    }
-
-    $classCounts = [];
-    $normalValues = [];
-    $remedialValues = [];
-    $susulanValues = [];
-    $finalValues = [];
-    $matchedStudents = 0;
-
-    foreach ($resultRows as $row) {
-        if (!empty($row['matched_master'])) {
-            $matchedStudents++;
-        }
-
-        if ($row['normal_score'] !== null) {
-            $normalValues[] = $row['normal_score'];
-        }
-        if ($row['remedial_score'] !== null) {
-            $remedialValues[] = $row['remedial_score'];
-        }
-        if ($row['susulan_score'] !== null) {
-            $susulanValues[] = $row['susulan_score'];
-        }
-        if ($row['final_score'] !== null) {
-            $finalValues[] = $row['final_score'];
-        }
-
-        $effectiveClass = $row['kelas'] !== '' ? $row['kelas'] : 'Tanpa kelas';
-        if (!isset($classCounts[$effectiveClass])) {
-            $classCounts[$effectiveClass] = 0;
-        }
-        $classCounts[$effectiveClass]++;
-    }
-
-    arsort($classCounts);
-    $classDistribution = [];
-    foreach ($classCounts as $className => $count) {
-        $classDistribution[] = [
-            'name' => $className,
-            'count' => $count,
+    if (count($uploadedFileMeta) > 1) {
+        $combinedProcessed = [
+            'file_name' => 'bulk-upload-' . count($uploadedFileMeta) . '-file.xlsx',
+            'sheet_name' => 'Gabungan NIM',
+            'summary' => $derivedSummary,
+            'data' => $combinedRows,
         ];
-    }
 
-    $unmatchedStudents = count($resultRows) - $matchedStudents;
-
-    $db->beginTransaction();
-
-    $importStmt = $db->prepare('INSERT INTO grade_recap_imports (file_name, sheet_name, total_rows, valid_rows, invalid_rows, duplicate_nim_rows, matched_students, unmatched_students, subject_id, exam_type, academic_year, term, updated_at) VALUES (:file_name, :sheet_name, :total_rows, :valid_rows, :invalid_rows, :duplicate_nim_rows, :matched_students, :unmatched_students, :subject_id, :exam_type, :academic_year, :term, CURRENT_TIMESTAMP)');
-    $importStmt->execute([
-        ':file_name' => $uploadedFile['name'] ?? 'nilai.xlsx',
-        ':sheet_name' => $sheetName,
-        ':total_rows' => count($resultRows),
-        ':valid_rows' => $stats['valid_rows'],
-        ':invalid_rows' => $stats['invalid_rows'],
-        ':duplicate_nim_rows' => $stats['duplicate_nim_rows'],
-        ':matched_students' => $matchedStudents,
-        ':unmatched_students' => $unmatchedStudents,
-        ':subject_id' => $subjectId,
-        ':exam_type' => $examType,
-        ':academic_year' => $academicYear,
-        ':term' => $term,
-    ]);
-    $importId = (int) $db->lastInsertId();
-
-    $resultStmt = $db->prepare('INSERT INTO grade_recap_results (import_id, subject_id, exam_type, academic_year, term, nim, source_name, student_id, student_name, class_name, normal_bs, normal_score, normal_letter, remedial_bs, remedial_score, remedial_letter, susulan_bs, susulan_score, susulan_letter, final_bs, final_score, final_letter, duplicate_nim_count, updated_at) VALUES (:import_id, :subject_id, :exam_type, :academic_year, :term, :nim, :source_name, :student_id, :student_name, :class_name, :normal_bs, :normal_score, :normal_letter, :remedial_bs, :remedial_score, :remedial_letter, :susulan_bs, :susulan_score, :susulan_letter, :final_bs, :final_score, :final_letter, :duplicate_nim_count, CURRENT_TIMESTAMP) ON CONFLICT(import_id, nim) DO UPDATE SET subject_id = excluded.subject_id, exam_type = excluded.exam_type, academic_year = excluded.academic_year, term = excluded.term, source_name = excluded.source_name, student_id = excluded.student_id, student_name = excluded.student_name, class_name = excluded.class_name, normal_bs = excluded.normal_bs, normal_score = excluded.normal_score, normal_letter = excluded.normal_letter, remedial_bs = excluded.remedial_bs, remedial_score = excluded.remedial_score, remedial_letter = excluded.remedial_letter, susulan_bs = excluded.susulan_bs, susulan_score = excluded.susulan_score, susulan_letter = excluded.susulan_letter, final_bs = excluded.final_bs, final_score = excluded.final_score, final_letter = excluded.final_letter, duplicate_nim_count = excluded.duplicate_nim_count, updated_at = CURRENT_TIMESTAMP');
-
-    foreach ($resultRows as $row) {
-        $resultStmt->execute([
-            ':import_id' => $importId,
-            ':subject_id' => $subjectId,
-            ':exam_type' => $examType,
-            ':academic_year' => $academicYear,
-            ':term' => $term,
-            ':nim' => $row['nim'],
-            ':source_name' => $row['source_name'],
-            ':student_id' => $row['student_id'],
-            ':student_name' => $row['nama'],
-            ':class_name' => $row['kelas'] !== '' ? $row['kelas'] : null,
-            ':normal_bs' => $row['normal_bs'],
-            ':normal_score' => $row['normal_score'],
-            ':normal_letter' => $row['normal_letter'],
-            ':remedial_bs' => $row['remedial_bs'],
-            ':remedial_score' => $row['remedial_score'],
-            ':remedial_letter' => $row['remedial_letter'],
-            ':susulan_bs' => $row['susulan_bs'],
-            ':susulan_score' => $row['susulan_score'],
-            ':susulan_letter' => $row['susulan_letter'],
-            ':final_bs' => $row['final_bs'],
-            ':final_score' => $row['final_score'],
-            ':final_letter' => $row['final_letter'],
-            ':duplicate_nim_count' => $row['duplicate_nim_count'],
-        ]);
+        $activeImportId = persistProcessedGradeRecapFile($db, [
+            'subject_id' => $subjectId,
+            'exam_type' => $examType,
+            'academic_year' => $academicYear,
+            'term' => $term,
+        ], $combinedProcessed);
+        $activeFileName = $combinedProcessed['file_name'];
+        $activeSheetName = $combinedProcessed['sheet_name'];
     }
 
     $db->commit();
-
     echo json_encode([
         'success' => true,
-        'message' => 'Rekap nilai ' . $examType . ' berhasil diproses',
+        'message' => 'Rekap nilai ' . $examType . ' berhasil diproses' . (count($uploadedFileMeta) > 1 ? ' (' . count($uploadedFileMeta) . ' file)' : ''),
         'meta' => [
-            'file_name' => $uploadedFile['name'] ?? 'nilai.xlsx',
-            'sheet_name' => $sheetName,
-            'import_id' => $importId,
+            'file_name' => $activeFileName,
+            'sheet_name' => $activeSheetName,
+            'import_id' => $activeImportId,
+            'import_ids' => array_values(array_map(static function ($meta) {
+                return (int) ($meta['import_id'] ?? 0);
+            }, $uploadedFileMeta)),
+            'uploaded_file_count' => count($uploadedFileMeta),
+            'uploaded_files' => $uploadedFileMeta,
             'exam_type' => $examType,
             'academic_year' => $academicYear,
             'term' => $term,
@@ -463,25 +301,8 @@ try {
                 'kategori' => 'K',
             ],
         ],
-        'summary' => [
-            'total_rows' => $stats['valid_rows'],
-            'unique_nim_rows' => count($resultRows),
-            'source_rows' => $stats['source_rows'],
-            'valid_rows' => $stats['valid_rows'],
-            'invalid_rows' => $stats['invalid_rows'],
-            'duplicate_nim_rows' => $stats['duplicate_nim_rows'],
-            'category_rows' => $stats['category_rows'],
-            'matched_students' => $matchedStudents,
-            'unmatched_students' => $unmatchedStudents,
-            'avg_normal' => calculateAverage($normalValues),
-            'avg_remedial' => calculateAverage($remedialValues),
-            'avg_susulan' => calculateAverage($susulanValues),
-            'avg_final' => calculateAverage($finalValues),
-            'highest_final' => $finalValues ? max($finalValues) : null,
-            'lowest_final' => $finalValues ? min($finalValues) : null,
-            'class_distribution' => $classDistribution,
-        ],
-        'data' => $resultRows,
+        'summary' => $derivedSummary,
+        'data' => $combinedRows,
     ]);
 } catch (Throwable $e) {
     if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
@@ -493,6 +314,7 @@ try {
         'success' => false,
         'message' => $e->getMessage(),
     ]);
+}
 }
 
 function sanitizeGradeCell($value)
@@ -728,6 +550,384 @@ function validateSpreadsheetRuntime()
     );
 }
 
+function normalizeUploadedGradeFiles($filesField)
+{
+    if (!is_array($filesField) || !array_key_exists('name', $filesField)) {
+        return [];
+    }
+
+    $normalized = [];
+    if (is_array($filesField['name'])) {
+        $count = count($filesField['name']);
+        for ($i = 0; $i < $count; $i++) {
+            $normalized[] = [
+                'name' => $filesField['name'][$i] ?? '',
+                'type' => $filesField['type'][$i] ?? '',
+                'tmp_name' => $filesField['tmp_name'][$i] ?? '',
+                'error' => $filesField['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $filesField['size'][$i] ?? 0,
+            ];
+        }
+    } else {
+        $normalized[] = [
+            'name' => $filesField['name'] ?? '',
+            'type' => $filesField['type'] ?? '',
+            'tmp_name' => $filesField['tmp_name'] ?? '',
+            'error' => $filesField['error'] ?? UPLOAD_ERR_NO_FILE,
+            'size' => $filesField['size'] ?? 0,
+        ];
+    }
+
+    $validFiles = [];
+    foreach ($normalized as $file) {
+        $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            $fileName = sanitizeGradeCell($file['name'] ?? '') ?: 'tanpa-nama';
+            throw new RuntimeException('Upload file gagal untuk ' . $fileName . ': ' . formatUploadErrorMessage($error));
+        }
+        if (sanitizeGradeCell($file['tmp_name'] ?? '') === '') {
+            throw new RuntimeException('File upload tidak valid');
+        }
+        $validFiles[] = $file;
+    }
+
+    return $validFiles;
+}
+
+function formatUploadErrorMessage($errorCode)
+{
+    $code = (int) $errorCode;
+    $messages = [
+        UPLOAD_ERR_INI_SIZE => 'ukuran file melebihi batas server',
+        UPLOAD_ERR_FORM_SIZE => 'ukuran file melebihi batas form',
+        UPLOAD_ERR_PARTIAL => 'file terupload sebagian',
+        UPLOAD_ERR_NO_TMP_DIR => 'folder temporary upload tidak tersedia',
+        UPLOAD_ERR_CANT_WRITE => 'gagal menulis file ke disk',
+        UPLOAD_ERR_EXTENSION => 'upload dihentikan oleh extension PHP',
+    ];
+
+    return $messages[$code] ?? 'terjadi error upload';
+}
+
+function processUploadedGradeRecapFile(array $uploadedFile, array $studentLookup)
+{
+    $extension = strtolower(pathinfo($uploadedFile['name'] ?? '', PATHINFO_EXTENSION));
+    if ($extension !== 'xlsx') {
+        throw new RuntimeException('Format file harus .xlsx');
+    }
+
+    $reader = IOFactory::createReader('Xlsx');
+    $reader->setReadDataOnly(true);
+    $spreadsheet = $reader->load($uploadedFile['tmp_name']);
+    $sheet = $spreadsheet->getSheet(0);
+    $sheetName = $sheet->getTitle();
+    $rows = $sheet->toArray(null, true, true, false);
+
+    $processed = buildRecapRowsFromSheetRows($rows, $studentLookup);
+    $resultRows = $processed['rows'];
+    $summary = $processed['summary'];
+
+    return [
+        'file_name' => $uploadedFile['name'] ?? 'nilai.xlsx',
+        'sheet_name' => $sheetName,
+        'summary' => $summary,
+        'data' => $resultRows,
+    ];
+}
+
+function persistProcessedGradeRecapFile(PDO $db, array $context, array $processed)
+{
+    $summary = $processed['summary'] ?? [];
+    $resultRows = $processed['data'] ?? [];
+
+    $importStmt = $db->prepare('INSERT INTO grade_recap_imports (file_name, sheet_name, total_rows, valid_rows, invalid_rows, duplicate_nim_rows, matched_students, unmatched_students, subject_id, exam_type, academic_year, term, updated_at) VALUES (:file_name, :sheet_name, :total_rows, :valid_rows, :invalid_rows, :duplicate_nim_rows, :matched_students, :unmatched_students, :subject_id, :exam_type, :academic_year, :term, CURRENT_TIMESTAMP)');
+    $importStmt->execute([
+        ':file_name' => (string) ($processed['file_name'] ?? 'nilai.xlsx'),
+        ':sheet_name' => (string) ($processed['sheet_name'] ?? 'Worksheet'),
+        ':total_rows' => (int) ($summary['unique_nim_rows'] ?? count($resultRows)),
+        ':valid_rows' => (int) ($summary['valid_rows'] ?? 0),
+        ':invalid_rows' => (int) ($summary['invalid_rows'] ?? 0),
+        ':duplicate_nim_rows' => (int) ($summary['duplicate_nim_rows'] ?? 0),
+        ':matched_students' => (int) ($summary['matched_students'] ?? 0),
+        ':unmatched_students' => (int) ($summary['unmatched_students'] ?? 0),
+        ':subject_id' => (int) $context['subject_id'],
+        ':exam_type' => $context['exam_type'],
+        ':academic_year' => $context['academic_year'],
+        ':term' => $context['term'],
+    ]);
+    $importId = (int) $db->lastInsertId();
+
+    $resultStmt = $db->prepare('INSERT INTO grade_recap_results (import_id, subject_id, exam_type, academic_year, term, nim, source_name, student_id, student_name, class_name, normal_bs, normal_score, normal_letter, remedial_bs, remedial_score, remedial_letter, susulan_bs, susulan_score, susulan_letter, final_bs, final_score, final_letter, duplicate_nim_count, updated_at) VALUES (:import_id, :subject_id, :exam_type, :academic_year, :term, :nim, :source_name, :student_id, :student_name, :class_name, :normal_bs, :normal_score, :normal_letter, :remedial_bs, :remedial_score, :remedial_letter, :susulan_bs, :susulan_score, :susulan_letter, :final_bs, :final_score, :final_letter, :duplicate_nim_count, CURRENT_TIMESTAMP) ON CONFLICT(import_id, nim) DO UPDATE SET subject_id = excluded.subject_id, exam_type = excluded.exam_type, academic_year = excluded.academic_year, term = excluded.term, source_name = excluded.source_name, student_id = excluded.student_id, student_name = excluded.student_name, class_name = excluded.class_name, normal_bs = excluded.normal_bs, normal_score = excluded.normal_score, normal_letter = excluded.normal_letter, remedial_bs = excluded.remedial_bs, remedial_score = excluded.remedial_score, remedial_letter = excluded.remedial_letter, susulan_bs = excluded.susulan_bs, susulan_score = excluded.susulan_score, susulan_letter = excluded.susulan_letter, final_bs = excluded.final_bs, final_score = excluded.final_score, final_letter = excluded.final_letter, duplicate_nim_count = excluded.duplicate_nim_count, updated_at = CURRENT_TIMESTAMP');
+
+    foreach ($resultRows as $row) {
+        $resultStmt->execute([
+            ':import_id' => $importId,
+            ':subject_id' => (int) $context['subject_id'],
+            ':exam_type' => $context['exam_type'],
+            ':academic_year' => $context['academic_year'],
+            ':term' => $context['term'],
+            ':nim' => $row['nim'],
+            ':source_name' => $row['source_name'],
+            ':student_id' => $row['student_id'],
+            ':student_name' => $row['nama'],
+            ':class_name' => $row['kelas'] !== '' ? $row['kelas'] : null,
+            ':normal_bs' => $row['normal_bs'],
+            ':normal_score' => $row['normal_score'],
+            ':normal_letter' => $row['normal_letter'],
+            ':remedial_bs' => $row['remedial_bs'],
+            ':remedial_score' => $row['remedial_score'],
+            ':remedial_letter' => $row['remedial_letter'],
+            ':susulan_bs' => $row['susulan_bs'],
+            ':susulan_score' => $row['susulan_score'],
+            ':susulan_letter' => $row['susulan_letter'],
+            ':final_bs' => $row['final_bs'],
+            ':final_score' => $row['final_score'],
+            ':final_letter' => $row['final_letter'],
+            ':duplicate_nim_count' => $row['duplicate_nim_count'],
+        ]);
+    }
+
+    return $importId;
+}
+
+function buildRecapRowsFromSheetRows(array $rows, array $studentLookup)
+{
+    $stats = [
+        'source_rows' => 0,
+        'valid_rows' => 0,
+        'invalid_rows' => 0,
+        'duplicate_nim_rows' => 0,
+        'category_rows' => [
+            'normal' => 0,
+            'remedial' => 0,
+            'susulan' => 0,
+        ],
+    ];
+
+    $aggregatedByNim = [];
+    for ($index = 1; $index < count($rows); $index++) {
+        $row = $rows[$index] ?? [];
+
+        $nim = sanitizeGradeCell($row[3] ?? '');
+        $sourceName = sanitizeGradeCell($row[1] ?? '');
+        $bsText = sanitizeBsCell($row[6] ?? '');
+        $score = normalizeGradeNumber($row[9] ?? null);
+        $categoryMarker = strtoupper(sanitizeGradeCell($row[10] ?? ''));
+
+        if ($nim === '' && $sourceName === '' && $bsText === '' && $score === null && $categoryMarker === '') {
+            continue;
+        }
+
+        $stats['source_rows']++;
+
+        $category = resolveAssessmentCategory($categoryMarker);
+        if ($nim === '' || $score === null || $category === null) {
+            $stats['invalid_rows']++;
+            continue;
+        }
+
+        $nimKey = 'nim:' . $nim;
+        if (!isset($aggregatedByNim[$nimKey])) {
+            $aggregatedByNim[$nimKey] = [
+                'nim' => $nim,
+                'source_name' => $sourceName,
+                'normal_bs' => null,
+                'normal_score' => null,
+                'normal_letter' => null,
+                'remedial_bs' => null,
+                'remedial_score' => null,
+                'remedial_letter' => null,
+                'susulan_bs' => null,
+                'susulan_score' => null,
+                'susulan_letter' => null,
+                'final_score' => null,
+                'final_letter' => null,
+                'duplicate_nim_count' => 0,
+                '_seen_rows' => 0,
+            ];
+        }
+
+        $record = &$aggregatedByNim[$nimKey];
+        if ($record['_seen_rows'] > 0) {
+            $record['duplicate_nim_count']++;
+            $stats['duplicate_nim_rows']++;
+        }
+        $record['_seen_rows']++;
+
+        $stats['valid_rows']++;
+        $stats['category_rows'][$category]++;
+        applyCategoryScore($record, $category, $score, $bsText);
+    }
+
+    $rowsByNim = [];
+    foreach ($aggregatedByNim as $record) {
+        $nim = (string) ($record['nim'] ?? '');
+        $record['final_score'] = maxScore($record['normal_score'], $record['remedial_score'], $record['susulan_score']);
+        $record['final_bs'] = resolveFinalBs($record);
+        $record['final_letter'] = scoreToLetter($record['final_score']);
+        unset($record['_seen_rows']);
+
+        $masterStudent = $studentLookup[$nim] ?? null;
+        $rowsByNim[$nim] = [
+            'nim' => $nim,
+            'nama' => $masterStudent['name'] ?? $record['source_name'],
+            'source_name' => $record['source_name'],
+            'kelas' => $masterStudent['class_name'] ?? '',
+            'master_class' => $masterStudent['class_name'] ?? '',
+            'normal_bs' => $record['normal_bs'],
+            'normal_score' => $record['normal_score'],
+            'normal_letter' => $record['normal_letter'],
+            'remedial_bs' => $record['remedial_bs'],
+            'remedial_score' => $record['remedial_score'],
+            'remedial_letter' => $record['remedial_letter'],
+            'susulan_bs' => $record['susulan_bs'],
+            'susulan_score' => $record['susulan_score'],
+            'susulan_letter' => $record['susulan_letter'],
+            'final_score' => $record['final_score'],
+            'final_letter' => $record['final_letter'],
+            'duplicate_nim_count' => $record['duplicate_nim_count'],
+            'final_bs' => $record['final_bs'],
+            'matched_master' => $masterStudent !== null,
+            'student_id' => $masterStudent['id'] ?? null,
+        ];
+    }
+
+    $resultRows = array_values($rowsByNim);
+    usort($resultRows, static function ($a, $b) {
+        return strcmp((string) ($a['nim'] ?? ''), (string) ($b['nim'] ?? ''));
+    });
+
+    $summary = buildRecapResponseSummary($resultRows, $stats);
+
+    return [
+        'rows' => $resultRows,
+        'summary' => $summary,
+    ];
+}
+
+function mergeBulkRecapRow(array $existing, array $incoming)
+{
+    $merged = $existing;
+
+    foreach (['normal', 'remedial', 'susulan'] as $category) {
+        $scoreKey = $category . '_score';
+        $letterKey = $category . '_letter';
+        $bsKey = $category . '_bs';
+        $existingScore = $merged[$scoreKey] ?? null;
+        $incomingScore = $incoming[$scoreKey] ?? null;
+
+        if ($incomingScore === null) {
+            continue;
+        }
+
+        if ($existingScore === null || (float) $incomingScore > (float) $existingScore) {
+            $merged[$scoreKey] = $incomingScore;
+            $merged[$letterKey] = $incoming[$letterKey] ?? null;
+            $merged[$bsKey] = $incoming[$bsKey] ?? null;
+            continue;
+        }
+
+        if ((float) $incomingScore === (float) $existingScore && sanitizeGradeCell($merged[$bsKey] ?? '') === '' && sanitizeGradeCell($incoming[$bsKey] ?? '') !== '') {
+            $merged[$bsKey] = $incoming[$bsKey];
+        }
+    }
+
+    if (sanitizeGradeCell($merged['source_name'] ?? '') === '' && sanitizeGradeCell($incoming['source_name'] ?? '') !== '') {
+        $merged['source_name'] = $incoming['source_name'];
+    }
+    if (sanitizeGradeCell($merged['nama'] ?? '') === '' && sanitizeGradeCell($incoming['nama'] ?? '') !== '') {
+        $merged['nama'] = $incoming['nama'];
+    }
+    if (sanitizeGradeCell($merged['kelas'] ?? '') === '' && sanitizeGradeCell($incoming['kelas'] ?? '') !== '') {
+        $merged['kelas'] = $incoming['kelas'];
+        $merged['master_class'] = $incoming['master_class'] ?? $incoming['kelas'];
+    }
+    if (($merged['student_id'] ?? null) === null && ($incoming['student_id'] ?? null) !== null) {
+        $merged['student_id'] = $incoming['student_id'];
+    }
+
+    $merged['matched_master'] = !empty($merged['matched_master']) || !empty($incoming['matched_master']);
+    $merged['duplicate_nim_count'] = (int) ($merged['duplicate_nim_count'] ?? 0) + (int) ($incoming['duplicate_nim_count'] ?? 0) + 1;
+
+    $merged['final_score'] = maxScore($merged['normal_score'] ?? null, $merged['remedial_score'] ?? null, $merged['susulan_score'] ?? null);
+    $merged['final_bs'] = resolveFinalBs($merged);
+    $merged['final_letter'] = scoreToLetter($merged['final_score']);
+
+    return $merged;
+}
+
+function buildRecapResponseSummary(array $resultRows, array $stats)
+{
+    $classCounts = [];
+    $normalValues = [];
+    $remedialValues = [];
+    $susulanValues = [];
+    $finalValues = [];
+    $matchedStudents = 0;
+
+    foreach ($resultRows as $row) {
+        if (!empty($row['matched_master'])) {
+            $matchedStudents++;
+        }
+
+        if ($row['normal_score'] !== null) {
+            $normalValues[] = $row['normal_score'];
+        }
+        if ($row['remedial_score'] !== null) {
+            $remedialValues[] = $row['remedial_score'];
+        }
+        if ($row['susulan_score'] !== null) {
+            $susulanValues[] = $row['susulan_score'];
+        }
+        if ($row['final_score'] !== null) {
+            $finalValues[] = $row['final_score'];
+        }
+
+        $effectiveClass = sanitizeGradeCell($row['kelas'] ?? '') !== '' ? $row['kelas'] : 'Tanpa kelas';
+        if (!isset($classCounts[$effectiveClass])) {
+            $classCounts[$effectiveClass] = 0;
+        }
+        $classCounts[$effectiveClass]++;
+    }
+
+    arsort($classCounts);
+    $classDistribution = [];
+    foreach ($classCounts as $className => $count) {
+        $classDistribution[] = [
+            'name' => $className,
+            'count' => $count,
+        ];
+    }
+
+    $rowCount = count($resultRows);
+
+    return [
+        'total_rows' => (int) ($stats['valid_rows'] ?? 0),
+        'unique_nim_rows' => $rowCount,
+        'source_rows' => (int) ($stats['source_rows'] ?? 0),
+        'valid_rows' => (int) ($stats['valid_rows'] ?? 0),
+        'invalid_rows' => (int) ($stats['invalid_rows'] ?? 0),
+        'duplicate_nim_rows' => (int) ($stats['duplicate_nim_rows'] ?? 0),
+        'category_rows' => [
+            'normal' => (int) ($stats['category_rows']['normal'] ?? 0),
+            'remedial' => (int) ($stats['category_rows']['remedial'] ?? 0),
+            'susulan' => (int) ($stats['category_rows']['susulan'] ?? 0),
+        ],
+        'matched_students' => $matchedStudents,
+        'unmatched_students' => $rowCount - $matchedStudents,
+        'avg_normal' => calculateAverage($normalValues),
+        'avg_remedial' => calculateAverage($remedialValues),
+        'avg_susulan' => calculateAverage($susulanValues),
+        'avg_final' => calculateAverage($finalValues),
+        'highest_final' => $finalValues ? max($finalValues) : null,
+        'lowest_final' => $finalValues ? min($finalValues) : null,
+        'class_distribution' => $classDistribution,
+    ];
+}
+
 function getLatestRecapImport(PDO $db, array $filters = [])
 {
     $params = [];
@@ -804,7 +1004,6 @@ function getStoredClassRecapList(PDO $db, array $filters = [])
 function getRecapFilterOptionLists(PDO $db)
 {
     $masterPeriods = getAcademicPeriods($db);
-    $historyStmt = $db->query('SELECT DISTINCT academic_year, term FROM grade_recap_imports WHERE (academic_year IS NOT NULL AND TRIM(academic_year) <> "") OR (term IS NOT NULL AND TRIM(term) <> "")');
 
     $academicYears = [];
     $terms = [];
@@ -814,27 +1013,6 @@ function getRecapFilterOptionLists(PDO $db)
     foreach ($masterPeriods as $period) {
         $academicYear = normalizeAcademicYear($period['academic_year'] ?? '');
         $term = normalizeTerm($period['term'] ?? '');
-        if ($academicYear !== null) {
-            $academicYears[$academicYear] = $academicYear;
-        }
-        if ($term !== null) {
-            $terms[$term] = $term;
-        }
-        if ($academicYear !== null && $term !== null) {
-            $key = $academicYear . '::' . $term;
-            if (!isset($seenPeriods[$key])) {
-                $seenPeriods[$key] = true;
-                $academicPeriods[] = [
-                    'academic_year' => $academicYear,
-                    'term' => $term,
-                ];
-            }
-        }
-    }
-
-    foreach ($historyStmt->fetchAll() as $row) {
-        $academicYear = normalizeAcademicYear($row['academic_year'] ?? '');
-        $term = normalizeTerm($row['term'] ?? '');
         if ($academicYear !== null) {
             $academicYears[$academicYear] = $academicYear;
         }
