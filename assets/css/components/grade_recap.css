@@ -1,0 +1,29 @@
+.grid {
+    align-items: start;
+}
+
+.grid > .card {
+    min-width: 0;
+}
+
+#gradeFileInfo {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.class-list-table td:last-child {
+    white-space: nowrap;
+}
+
+.class-list-actions {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.class-list-actions .btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}

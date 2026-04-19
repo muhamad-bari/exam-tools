@@ -27,7 +27,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .btn.primary { background: #2563eb; }
         .btn.green { background: #0f766e; }
         .btn.gray { background: #64748b; }
-        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 18px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0 18px; }
         .stat { background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 14px; padding: 14px; }
         .stat strong { display: block; font-size: 1.5rem; color: #0f172a; }
         .table-wrap { border: 1px solid #dbe4ee; border-radius: 14px; overflow: hidden; }
@@ -92,7 +92,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
                         <input type="file" id="studentsCsv" accept=".csv" multiple style="display:none;">
                         <div class="actions">
                             <button type="button" class="btn primary" onclick="importStudents()"><i class="fa-solid fa-file-import"></i> Import Mahasiswa</button>
-                            <a href="format_mahasiswa.csv" download class="btn gray"><i class="fa-solid fa-download"></i> Template Mahasiswa</a>
+                            <a href="format/format_mahasiswa.csv" download class="btn gray"><i class="fa-solid fa-download"></i> Template Mahasiswa</a>
                         </div>
                     </div>
                     <div>
@@ -104,7 +104,21 @@ require_once __DIR__ . '/../../../bootstrap.php';
                         <input type="file" id="subjectsCsv" accept=".csv" multiple style="display:none;">
                         <div class="actions">
                             <button type="button" class="btn green" onclick="importSubjects()"><i class="fa-solid fa-book-medical"></i> Import Mata Kuliah</button>
-                            <a href="format_matakuliah.csv" download class="btn gray"><i class="fa-solid fa-download"></i> Template Mata Kuliah</a>
+                            <a href="format/format_matakuliah.csv" download class="btn gray"><i class="fa-solid fa-download"></i> Template Mata Kuliah</a>
+                        </div>
+                    </div>
+                    <div>
+                        <h2>Periode Akademik</h2>
+                        <div class="stack" style="gap:10px;">
+                            <input type="text" id="newAcademicYear" class="form-control" placeholder="Tahun ajaran, mis. 2025/2026" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff;">
+                            <select id="newTerm" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff;">
+                                <option value="">Pilih periode semester</option>
+                                <option value="GANJIL">Ganjil</option>
+                                <option value="GENAP">Genap</option>
+                            </select>
+                            <div class="actions" style="margin-top:0;">
+                                <button type="button" class="btn gray" onclick="createAcademicPeriod()"><i class="fa-solid fa-calendar-plus"></i> Simpan Periode</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -121,6 +135,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     <div class="stat"><strong id="classCount">0</strong><span class="muted">Total kelas</span></div>
                     <div class="stat"><strong id="studentCount">0</strong><span class="muted">Total mahasiswa aktif</span></div>
                     <div class="stat"><strong id="subjectCount">0</strong><span class="muted">Total mata kuliah</span></div>
+                    <div class="stat"><strong id="academicPeriodCount">0</strong><span class="muted">Total periode akademik</span></div>
                 </div>
                 <h2>Daftar Kelas</h2>
                 <p class="muted" style="margin:0 0 10px;">Fitur `Naik Kelas` mengikuti pola semester: ganjil ke genap tetap tingkat, genap ke ganjil berikutnya otomatis naik tingkat.</p>
@@ -150,6 +165,13 @@ require_once __DIR__ . '/../../../bootstrap.php';
                             <button type="button" class="pager-btn" id="subjectNextBtn" onclick="changeSubjectPage(1)" disabled>Next</button>
                         </div>
                     </div>
+                </div>
+                <h2 style="margin-top:18px;">Daftar Periode Akademik</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Tahun Ajaran</th><th>Periode</th></tr></thead>
+                        <tbody id="academicPeriodBody"><tr><td colspan="2" style="text-align:center; color:#64748b;">Belum ada data periode akademik.</td></tr></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -192,6 +214,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
         const studentModalPageSize = 10;
         let allClassRows = [];
         let allSubjectRows = [];
+        let allAcademicPeriodRows = [];
         let classPage = 1;
         let subjectPage = 1;
         let currentStudentModalClassId = null;
@@ -334,6 +357,16 @@ require_once __DIR__ . '/../../../bootstrap.php';
             );
         }
 
+        function renderAcademicPeriodTable() {
+            const body = document.getElementById('academicPeriodBody');
+            if (!allAcademicPeriodRows.length) {
+                body.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#64748b;">Belum ada data periode akademik.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = allAcademicPeriodRows.map(item => `<tr><td>${escapeHtml(item.academic_year)}</td><td>${escapeHtml(item.term)}</td></tr>`).join('');
+        }
+
         function renderStudentImportClassOptions(selectedClassId = '') {
             const select = document.getElementById('studentImportClass');
             const options = ['<option value="">Pilih kelas terlebih dahulu</option>'];
@@ -381,6 +414,40 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     nameInput.value = '';
                     codeInput.value = '';
                     return loadOverview(true).then(() => showToast(`Kelas ditambahkan: ${res.data.name}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function createAcademicPeriod() {
+            const academicYearInput = document.getElementById('newAcademicYear');
+            const termSelect = document.getElementById('newTerm');
+            const academicYear = academicYearInput.value.trim();
+            const term = termSelect.value.trim();
+
+            if (!academicYear) {
+                showToast('Tahun ajaran wajib diisi', 'error');
+                return;
+            }
+
+            if (!term) {
+                showToast('Pilih periode semester terlebih dahulu', 'error');
+                return;
+            }
+
+            fetch('index.php?api=master_data&action=create_academic_period', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ academic_year: academicYear, term })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Simpan periode akademik gagal');
+                    }
+
+                    academicYearInput.value = '';
+                    termSelect.value = '';
+                    return loadOverview(true).then(() => showToast(`Periode akademik disimpan: ${res.data.academic_year} ${res.data.term}`));
                 })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -547,18 +614,22 @@ require_once __DIR__ . '/../../../bootstrap.php';
 
                     const classes = res.classes || [];
                     const subjects = res.subjects || [];
+                    const academicPeriods = res.academic_periods || [];
                     const totalStudents = classes.reduce((sum, item) => sum + Number(item.student_count || 0), 0);
 
                     document.getElementById('classCount').textContent = classes.length;
                     document.getElementById('studentCount').textContent = totalStudents;
                     document.getElementById('subjectCount').textContent = subjects.length;
+                    document.getElementById('academicPeriodCount').textContent = academicPeriods.length;
 
                     allClassRows = classes;
                     allSubjectRows = subjects;
+                    allAcademicPeriodRows = academicPeriods;
                     classPage = 1;
                     subjectPage = 1;
                     renderClassTable();
                     renderSubjectTable();
+                    renderAcademicPeriodTable();
                     renderStudentImportClassOptions(document.getElementById('studentImportClass').value || '');
 
                     if (!silent) {

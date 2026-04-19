@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
     <title>Rekap Nilai - Exam Tools</title>
     <link rel="stylesheet" href="assets/css/core/base.css">
     <link rel="stylesheet" href="assets/css/components/layout.css">
+    <link rel="stylesheet" href="assets/css/components/grade_recap.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { overflow: auto; background: linear-gradient(135deg, #eef4fb 0%, #f6f1ea 100%); }
@@ -21,13 +22,15 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .stack { display: grid; gap: 14px; }
         .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 170px; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 18px; background: #f8fafc; cursor: pointer; text-align: center; transition: border-color .2s ease, background-color .2s ease; }
         .drop:hover, .drop.dragover { border-color: #2563eb; background: #eff6ff; }
-        .drop strong { display: grid; gap: 10px; justify-items: center; }
+        .drop strong { display: grid; gap: 10px; justify-items: center; width: 100%; min-width: 0; }
+        .drop strong span { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
         .drop i { font-size: 2rem; color: #2563eb; }
         .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 10px 14px; color: #fff; text-decoration: none; cursor: pointer; font-weight: 600; }
         .btn.primary { background: #2563eb; }
         .btn.gray { background: #64748b; }
         .btn:disabled { opacity: .5; cursor: not-allowed; }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; min-width: 0; }
+        .actions .btn { flex: 1 1 160px; min-width: 0; }
         .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
         .stat { background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 14px; padding: 14px; }
         .stat strong { display: block; font-size: 1.5rem; color: #0f172a; }
@@ -46,6 +49,26 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 4px 9px; font-size: 0.76rem; font-weight: 700; }
         .badge.success { background: #dcfce7; color: #166534; }
         .badge.warn { background: #fee2e2; color: #991b1b; }
+        .result-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+        .result-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        .class-list-table td:last-child { width: 1%; white-space: nowrap; }
+        .inline-link { border: none; background: transparent; color: #2563eb; cursor: pointer; padding: 0; font-weight: 600; }
+        .inline-link:hover { text-decoration: underline; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px; }
+        .modal-backdrop.open { display: flex; }
+        .modal-card { width: min(900px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: #fff; border: 1px solid #dbe4ee; border-radius: 16px; box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18); padding: 18px; }
+        .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .modal-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+        .modal-table-wrap { border: 1px solid #dbe4ee; border-radius: 12px; overflow: hidden; }
+        .modal-table-wrap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .modal-table-wrap th, .modal-table-wrap td { padding: 9px 10px; border-bottom: 1px solid #e5edf5; font-size: 0.86rem; }
+        .modal-table-wrap tr:last-child td { border-bottom: none; }
+        .modal-table-wrap th { background: #f8fafc; color: #475569; }
+        .assign-row-failed { background: #fff1f2; }
+        .assign-row-failed td { color: #9f1239; }
+        .assign-error-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; background: #fee2e2; color: #991b1b; }
         #toast-container { position: fixed; top: 78px; right: 20px; z-index: 9999; display: grid; gap: 8px; }
         .toast { min-width: 240px; padding: 10px 14px; border-radius: 10px; color: #fff; background: #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.16); opacity: 0; transform: translateY(-10px); transition: all .25s ease; }
         .toast.show { opacity: 1; transform: translateY(0); }
@@ -59,277 +82,20 @@ require_once __DIR__ . '/../../../bootstrap.php';
     <div id="toast-container"></div>
     <div class="page">
         <div class="grid">
+            <?php require __DIR__ . '/partials/sidebar_panel.php'; ?>
             <div class="card">
-                <div class="stack">
-                    <div>
-                        <h1><i class="fa-solid fa-chart-column"></i> Rekap Nilai</h1>
-                        <p class="muted">Upload file Excel `.xlsx` untuk membaca rekap nilai UTS dan UAS. Sistem akan mencoba mencocokkan `NIM` ke master mahasiswa aktif.</p>
-                    </div>
-                    <div>
-                        <label class="drop" id="gradeDrop" for="gradeFile">
-                            <strong>
-                                <i class="fa-solid fa-file-excel"></i>
-                                <span>Pilih file Excel nilai</span>
-                                <span id="gradeFileInfo" class="muted">Format umum: `NIM`, `Nama`, `Kelas`, `UTS`, `UAS`</span>
-                            </strong>
-                        </label>
-                        <input type="file" id="gradeFile" accept=".xlsx" style="display:none;">
-                    </div>
-                    <div class="actions">
-                        <button type="button" class="btn primary" onclick="uploadGradeRecap()"><i class="fa-solid fa-upload"></i> Upload & Baca</button>
-                        <button type="button" class="btn gray" onclick="resetGradeRecap()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
-                    </div>
-                    <div class="card" style="padding:16px; box-shadow:none; background:#f8fafc;">
-                        <h2 style="font-size:1rem;">Deteksi Header</h2>
-                        <p class="muted" id="detectedInfo">Belum ada file diproses.</p>
-                        <div class="pill-list" id="detectedHeaders"></div>
-                    </div>
-                    <div class="card" style="padding:16px; box-shadow:none; background:#f8fafc;">
-                        <h2 style="font-size:1rem;">Distribusi Kelas</h2>
-                        <div class="pill-list" id="classDistribution"><span class="muted">Belum ada data.</span></div>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
-                    <div>
-                        <h2 style="margin-bottom:6px;">Hasil Rekap</h2>
-                        <p class="muted" id="summaryInfo">Upload file nilai untuk melihat ringkasan UTS/UAS.</p>
-                    </div>
-                </div>
-                <div class="stats">
-                    <div class="stat"><strong id="totalRows">0</strong><span class="muted">Total baris valid</span></div>
-                    <div class="stat"><strong id="avgUts">-</strong><span class="muted">Rata-rata UTS</span></div>
-                    <div class="stat"><strong id="avgUas">-</strong><span class="muted">Rata-rata UAS</span></div>
-                    <div class="stat"><strong id="avgFinal">-</strong><span class="muted">Rata-rata akhir</span></div>
-                    <div class="stat"><strong id="matchedStudents">0</strong><span class="muted">Cocok dengan master</span></div>
-                    <div class="stat"><strong id="unmatchedStudents">0</strong><span class="muted">Belum ada di master</span></div>
-                </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>No</th>
-                                <th>NIM</th>
-                                <th>Nama</th>
-                                <th>Kelas</th>
-                                <th>UTS</th>
-                                <th>UAS</th>
-                                <th>Rata-rata</th>
-                                <th>Master</th>
-                            </tr>
-                        </thead>
-                        <tbody id="gradeBody"><tr><td colspan="8" style="text-align:center; color:#64748b;">Belum ada data rekap nilai.</td></tr></tbody>
-                    </table>
-                    <div class="table-pagination">
-                        <span class="table-pagination-info" id="gradePageInfo">Page 1 / 1</span>
-                        <div class="table-pagination-actions">
-                            <button type="button" class="pager-btn" id="gradePrevBtn" onclick="changeGradePage(-1)" disabled>Prev</button>
-                            <button type="button" class="pager-btn" id="gradeNextBtn" onclick="changeGradePage(1)" disabled>Next</button>
-                        </div>
-                    </div>
-                </div>
+                <?php require __DIR__ . '/partials/default_content.php'; ?>
+                <?php require __DIR__ . '/partials/upload_detail_content.php'; ?>
             </div>
         </div>
     </div>
+    <?php require __DIR__ . '/partials/assign_modal.php'; ?>
     <script src="assets/js/shared/utils.js"></script>
-    <script>
-        const pageSize = 10;
-        let allGradeRows = [];
-        let gradePage = 1;
-
-        function escapeHtml(value) {
-            return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        }
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `<i class="fa-solid fa-${type === 'success' ? 'check-circle' : 'circle-exclamation'}"></i> <span>${escapeHtml(message)}</span>`;
-            container.appendChild(toast);
-            requestAnimationFrame(() => {
-                toast.classList.add('show');
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 250);
-                }, 2800);
-            });
-        }
-
-        function preventDefaults(event) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-
-        function setupDragAndDrop() {
-            const dropZone = document.getElementById('gradeDrop');
-            const input = document.getElementById('gradeFile');
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-            });
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-            });
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-            });
-            dropZone.addEventListener('drop', event => {
-                const files = event.dataTransfer.files;
-                if (!files || !files.length) {
-                    return;
-                }
-                try {
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(files[0]);
-                    input.files = dataTransfer.files;
-                } catch (error) {
-                }
-                updateSelectedFileInfo();
-            }, false);
-        }
-
-        function updateSelectedFileInfo() {
-            const input = document.getElementById('gradeFile');
-            const info = document.getElementById('gradeFileInfo');
-            const file = input.files && input.files[0] ? input.files[0] : null;
-
-            if (!file) {
-                info.textContent = 'Format umum: `NIM`, `Nama`, `Kelas`, `UTS`, `UAS`';
-                return;
-            }
-
-            if (!file.name.toLowerCase().endsWith('.xlsx')) {
-                showToast('File harus berformat .xlsx', 'error');
-                input.value = '';
-                info.textContent = 'Format umum: `NIM`, `Nama`, `Kelas`, `UTS`, `UAS`';
-                return;
-            }
-
-            info.textContent = file.name;
-        }
-
-        function formatNumber(value) {
-            if (value === null || value === undefined || value === '') {
-                return '-';
-            }
-            const number = Number(value);
-            return Number.isFinite(number) ? number.toFixed(2).replace(/\.00$/, '') : '-';
-        }
-
-        function renderPagedTable() {
-            const body = document.getElementById('gradeBody');
-            const pageInfo = document.getElementById('gradePageInfo');
-            const prevBtn = document.getElementById('gradePrevBtn');
-            const nextBtn = document.getElementById('gradeNextBtn');
-
-            if (!allGradeRows.length) {
-                body.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#64748b;">Belum ada data rekap nilai.</td></tr>';
-                pageInfo.textContent = 'Page 1 / 1';
-                prevBtn.disabled = true;
-                nextBtn.disabled = true;
-                return;
-            }
-
-            const totalPages = Math.max(1, Math.ceil(allGradeRows.length / pageSize));
-            gradePage = Math.min(Math.max(gradePage, 1), totalPages);
-            const startIndex = (gradePage - 1) * pageSize;
-            const visibleRows = allGradeRows.slice(startIndex, startIndex + pageSize);
-
-            body.innerHTML = visibleRows.map((item, index) => {
-                const classLabel = item.kelas ? escapeHtml(item.kelas) : `<span class="muted">${escapeHtml(item.master_class || 'Tidak ada')}</span>`;
-                const masterBadge = item.matched_master
-                    ? '<span class="badge success">Cocok</span>'
-                    : '<span class="badge warn">Belum ada</span>';
-                return `<tr><td>${startIndex + index + 1}</td><td>${escapeHtml(item.nim)}</td><td>${escapeHtml(item.nama)}</td><td>${classLabel}</td><td>${formatNumber(item.uts)}</td><td>${formatNumber(item.uas)}</td><td>${formatNumber(item.final_score)}</td><td>${masterBadge}</td></tr>`;
-            }).join('');
-
-            pageInfo.textContent = `Page ${gradePage} / ${totalPages}`;
-            prevBtn.disabled = gradePage <= 1;
-            nextBtn.disabled = gradePage >= totalPages;
-        }
-
-        function changeGradePage(direction) {
-            gradePage += direction;
-            renderPagedTable();
-        }
-
-        function renderDistribution(items) {
-            const container = document.getElementById('classDistribution');
-            if (!items || !items.length) {
-                container.innerHTML = '<span class="muted">Belum ada data.</span>';
-                return;
-            }
-
-            container.innerHTML = items.map(item => `<span class="pill"><i class="fa-solid fa-users"></i> ${escapeHtml(item.name)} <strong>${escapeHtml(item.count)}</strong></span>`).join('');
-        }
-
-        function renderDetectedHeaders(headers) {
-            const container = document.getElementById('detectedHeaders');
-            if (!headers || !headers.length) {
-                container.innerHTML = '<span class="muted">Belum ada header terdeteksi.</span>';
-                return;
-            }
-
-            container.innerHTML = headers.map(item => `<span class="pill"><i class="fa-solid fa-tag"></i> ${escapeHtml(item)}</span>`).join('');
-        }
-
-        function resetGradeRecap() {
-            document.getElementById('gradeFile').value = '';
-            allGradeRows = [];
-            gradePage = 1;
-            updateSelectedFileInfo();
-            document.getElementById('summaryInfo').textContent = 'Upload file nilai untuk melihat ringkasan UTS/UAS.';
-            document.getElementById('detectedInfo').textContent = 'Belum ada file diproses.';
-            document.getElementById('totalRows').textContent = '0';
-            document.getElementById('avgUts').textContent = '-';
-            document.getElementById('avgUas').textContent = '-';
-            document.getElementById('avgFinal').textContent = '-';
-            document.getElementById('matchedStudents').textContent = '0';
-            document.getElementById('unmatchedStudents').textContent = '0';
-            renderDetectedHeaders([]);
-            renderDistribution([]);
-            renderPagedTable();
-        }
-
-        function uploadGradeRecap() {
-            const input = document.getElementById('gradeFile');
-            if (!input.files || !input.files.length) {
-                showToast('Pilih file Excel nilai terlebih dahulu', 'error');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('grades_file', input.files[0]);
-
-            fetch('index.php?api=rekap_nilai', { method: 'POST', body: formData })
-                .then(r => r.json())
-                .then(res => {
-                    if (!res.success) {
-                        throw new Error(res.message || 'Upload nilai gagal');
-                    }
-
-                    allGradeRows = res.data || [];
-                    gradePage = 1;
-                    document.getElementById('summaryInfo').textContent = `${res.meta.file_name} - Sheet ${res.meta.sheet_name}`;
-                    document.getElementById('detectedInfo').textContent = `Header terdeteksi dari sheet ${res.meta.sheet_name}.`;
-                    document.getElementById('totalRows').textContent = String(res.summary.total_rows || 0);
-                    document.getElementById('avgUts').textContent = formatNumber(res.summary.avg_uts);
-                    document.getElementById('avgUas').textContent = formatNumber(res.summary.avg_uas);
-                    document.getElementById('avgFinal').textContent = formatNumber(res.summary.avg_final);
-                    document.getElementById('matchedStudents').textContent = String(res.summary.matched_students || 0);
-                    document.getElementById('unmatchedStudents').textContent = String(res.summary.unmatched_students || 0);
-                    renderDetectedHeaders(res.meta.detected_headers || []);
-                    renderDistribution(res.summary.class_distribution || []);
-                    renderPagedTable();
-                    showToast(res.message);
-                })
-                .catch(error => showToast(error.message, 'error'));
-        }
-
-        document.getElementById('gradeFile').addEventListener('change', updateSelectedFileInfo);
-        setupDragAndDrop();
-        resetGradeRecap();
-    </script>
+    <script src="assets/js/grade_recap/state.js"></script>
+    <script src="assets/js/grade_recap/table.js"></script>
+    <script src="assets/js/grade_recap/stored.js"></script>
+    <script src="assets/js/grade_recap/assign.js"></script>
+    <script src="assets/js/grade_recap/upload.js"></script>
+    <script src="assets/js/grade_recap/bootstrap.js"></script>
 </body>
 </html>

@@ -12,7 +12,8 @@ try {
     if ($action === 'list_all') {
         $classes = getClassesWithCounts($db);
         $subjects = getSubjects($db);
-        echo json_encode(['success' => true, 'classes' => $classes, 'subjects' => $subjects]);
+        $academicPeriods = getAcademicPeriods($db);
+        echo json_encode(['success' => true, 'classes' => $classes, 'subjects' => $subjects, 'academic_periods' => $academicPeriods]);
         exit;
     }
 
@@ -37,6 +38,11 @@ try {
         exit;
     }
 
+    if ($action === 'list_academic_periods') {
+        echo json_encode(['success' => true, 'data' => getAcademicPeriods($db)]);
+        exit;
+    }
+
     if ($action === 'create_subject') {
         ensurePostRequest();
         $input = readJsonInput();
@@ -46,6 +52,19 @@ try {
             'success' => true,
             'message' => 'Mata kuliah berhasil disimpan',
             'data' => $subject,
+        ]);
+        exit;
+    }
+
+    if ($action === 'create_academic_period') {
+        ensurePostRequest();
+        $input = readJsonInput();
+        $academicPeriod = getOrCreateAcademicPeriod($db, $input['academic_year'] ?? '', $input['term'] ?? '');
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Periode akademik berhasil disimpan',
+            'data' => $academicPeriod,
         ]);
         exit;
     }

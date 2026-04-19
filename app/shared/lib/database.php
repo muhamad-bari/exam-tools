@@ -70,10 +70,114 @@ function initializeDatabaseSchema(PDO $db)
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS master_academic_periods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year TEXT NOT NULL,
+        term TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (academic_year, term)
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS grade_recap_imports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT NOT NULL,
+        sheet_name TEXT NOT NULL,
+        total_rows INTEGER NOT NULL DEFAULT 0,
+        valid_rows INTEGER NOT NULL DEFAULT 0,
+        invalid_rows INTEGER NOT NULL DEFAULT 0,
+        duplicate_nim_rows INTEGER NOT NULL DEFAULT 0,
+        matched_students INTEGER NOT NULL DEFAULT 0,
+        unmatched_students INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    ensureColumnExists($db, 'grade_recap_imports', 'file_name', 'TEXT NOT NULL DEFAULT "nilai.xlsx"');
+    ensureColumnExists($db, 'grade_recap_imports', 'sheet_name', 'TEXT NOT NULL DEFAULT "Worksheet"');
+    ensureColumnExists($db, 'grade_recap_imports', 'total_rows', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'valid_rows', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'invalid_rows', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'duplicate_nim_rows', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'matched_students', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'unmatched_students', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+    ensureColumnExists($db, 'grade_recap_imports', 'subject_id', 'INTEGER DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_imports', 'exam_type', 'TEXT NOT NULL DEFAULT "UAS"');
+    ensureColumnExists($db, 'grade_recap_imports', 'academic_year', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_imports', 'term', 'TEXT DEFAULT NULL');
+
+    $db->exec("CREATE TABLE IF NOT EXISTS grade_recap_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        import_id INTEGER NOT NULL,
+        nim TEXT NOT NULL,
+        source_name TEXT DEFAULT NULL,
+        student_id INTEGER DEFAULT NULL,
+        student_name TEXT DEFAULT NULL,
+        class_name TEXT DEFAULT NULL,
+        normal_bs TEXT DEFAULT NULL,
+        normal_score REAL DEFAULT NULL,
+        normal_letter TEXT DEFAULT NULL,
+        remedial_bs TEXT DEFAULT NULL,
+        remedial_score REAL DEFAULT NULL,
+        remedial_letter TEXT DEFAULT NULL,
+        susulan_bs TEXT DEFAULT NULL,
+        susulan_score REAL DEFAULT NULL,
+        susulan_letter TEXT DEFAULT NULL,
+        final_score REAL DEFAULT NULL,
+        final_letter TEXT DEFAULT NULL,
+        duplicate_nim_count INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (import_id) REFERENCES grade_recap_imports(id),
+        FOREIGN KEY (student_id) REFERENCES master_students(id),
+        UNIQUE (import_id, nim)
+    )");
+
+    ensureColumnExists($db, 'grade_recap_results', 'source_name', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'student_id', 'INTEGER DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'student_name', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'class_name', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'normal_bs', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'normal_score', 'REAL DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'normal_letter', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'remedial_bs', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'remedial_score', 'REAL DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'remedial_letter', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'susulan_bs', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'susulan_score', 'REAL DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'susulan_letter', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'final_score', 'REAL DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'final_letter', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'final_bs', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'duplicate_nim_count', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_results', 'subject_id', 'INTEGER DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'exam_type', 'TEXT NOT NULL DEFAULT "UAS"');
+    ensureColumnExists($db, 'grade_recap_results', 'academic_year', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'term', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'grade_recap_results', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+
     $db->exec('CREATE INDEX IF NOT EXISTS idx_sessions_folder_id ON sessions(folder_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_class_id ON master_students(class_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_active_class ON master_students(is_active, class_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_import_id ON grade_recap_results(import_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_nim ON grade_recap_results(nim)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_final_score ON grade_recap_results(final_score)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_imports_subject_id ON grade_recap_imports(subject_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_imports_subject_exam_type ON grade_recap_imports(subject_id, exam_type)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_imports_period_scope ON grade_recap_imports(subject_id, exam_type, academic_year, term)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_subject_id ON grade_recap_results(subject_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_subject_class_nim ON grade_recap_results(subject_id, class_name, nim)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_subject_exam_class ON grade_recap_results(subject_id, exam_type, class_name)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_period_scope ON grade_recap_results(subject_id, exam_type, academic_year, term, class_name)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_master_academic_periods_year_term ON master_academic_periods(academic_year, term)');
+
+    $db->exec("UPDATE grade_recap_imports SET exam_type = 'UAS' WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
+    $db->exec('UPDATE grade_recap_results SET subject_id = (SELECT subject_id FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE subject_id IS NULL');
+    $db->exec("UPDATE grade_recap_results SET exam_type = COALESCE((SELECT i.exam_type FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id), 'UAS') WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
+    $db->exec('UPDATE grade_recap_results SET academic_year = (SELECT i.academic_year FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE academic_year IS NULL OR TRIM(academic_year) = ""');
+    $db->exec('UPDATE grade_recap_results SET term = (SELECT i.term FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE term IS NULL OR TRIM(term) = ""');
 
     syncStructuredClassMetadata($db);
 }
@@ -435,6 +539,107 @@ function getOrCreateSubject(PDO $db, $subjectName)
     return [
         'id' => (int) $db->lastInsertId(),
         'name' => $subjectName,
+    ];
+}
+
+function normalizeAcademicPeriodAcademicYear($value)
+{
+    $value = sanitizeMasterName($value);
+    if ($value === '') {
+        return null;
+    }
+
+    if (preg_match('/^(\d{4})\s*[\/\-]\s*(\d{4})$/', $value, $matches) !== 1) {
+        return null;
+    }
+
+    $startYear = (int) $matches[1];
+    $endYear = (int) $matches[2];
+    if ($endYear !== $startYear + 1) {
+        return null;
+    }
+
+    return $startYear . '/' . $endYear;
+}
+
+function normalizeAcademicPeriodTerm($value)
+{
+    $value = strtoupper(sanitizeMasterName($value));
+    if ($value === 'GANJIL' || $value === 'GENAP') {
+        return $value;
+    }
+
+    return null;
+}
+
+function getAcademicPeriods(PDO $db)
+{
+    $rows = $db->query('SELECT id, academic_year, term FROM master_academic_periods ORDER BY academic_year DESC, CASE term WHEN "GANJIL" THEN 1 WHEN "GENAP" THEN 2 ELSE 3 END ASC, id DESC')->fetchAll();
+    foreach ($rows as &$row) {
+        $row['id'] = (int) $row['id'];
+        $row['academic_year'] = (string) ($row['academic_year'] ?? '');
+        $row['term'] = (string) ($row['term'] ?? '');
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function academicPeriodExists(PDO $db, $academicYear, $term)
+{
+    $academicYear = normalizeAcademicPeriodAcademicYear($academicYear);
+    $term = normalizeAcademicPeriodTerm($term);
+    if ($academicYear === null || $term === null) {
+        return false;
+    }
+
+    $stmt = $db->prepare('SELECT id FROM master_academic_periods WHERE academic_year = :academic_year AND term = :term LIMIT 1');
+    $stmt->execute([
+        ':academic_year' => $academicYear,
+        ':term' => $term,
+    ]);
+
+    return (bool) $stmt->fetch();
+}
+
+function getOrCreateAcademicPeriod(PDO $db, $academicYear, $term)
+{
+    $academicYear = normalizeAcademicPeriodAcademicYear($academicYear);
+    $term = normalizeAcademicPeriodTerm($term);
+
+    if ($academicYear === null) {
+        throw new InvalidArgumentException('Tahun ajaran wajib diisi dengan format seperti 2025/2026');
+    }
+
+    if ($term === null) {
+        throw new InvalidArgumentException('Periode semester wajib dipilih (Ganjil/Genap)');
+    }
+
+    $findStmt = $db->prepare('SELECT id, academic_year, term FROM master_academic_periods WHERE academic_year = :academic_year AND term = :term LIMIT 1');
+    $findStmt->execute([
+        ':academic_year' => $academicYear,
+        ':term' => $term,
+    ]);
+    $existing = $findStmt->fetch();
+
+    if ($existing) {
+        return [
+            'id' => (int) $existing['id'],
+            'academic_year' => (string) $existing['academic_year'],
+            'term' => (string) $existing['term'],
+        ];
+    }
+
+    $insertStmt = $db->prepare('INSERT INTO master_academic_periods (academic_year, term) VALUES (:academic_year, :term)');
+    $insertStmt->execute([
+        ':academic_year' => $academicYear,
+        ':term' => $term,
+    ]);
+
+    return [
+        'id' => (int) $db->lastInsertId(),
+        'academic_year' => $academicYear,
+        'term' => $term,
     ];
 }
 

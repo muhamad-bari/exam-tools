@@ -44,6 +44,7 @@ set_time_limit(300);
         .right-panel {
             overflow-y: auto;
             padding: 20px;
+            min-width: 0;
         }
 
         .left-panel {
@@ -198,6 +199,7 @@ set_time_limit(300);
         .student-preview-list table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         .student-preview-list th,
@@ -206,6 +208,8 @@ set_time_limit(300);
             border-bottom: 1px solid var(--soft-border);
             font-size: 0.8rem;
             text-align: left;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .student-preview-list th {
@@ -218,9 +222,16 @@ set_time_limit(300);
             justify-content: space-between;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
             padding: 10px;
             border-top: 1px solid var(--soft-border);
             background: #f8fafc;
+        }
+
+        .student-preview-pagination #studentPreviewPageInfo {
+            min-width: 0;
+            flex: 1;
+            text-align: center;
         }
 
         .student-preview-pagination button {

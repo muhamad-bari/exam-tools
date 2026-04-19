@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['filecsv'])) {
                         <button type="submit" class="btn-submit" style="flex: 2;">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Bulk QR
                         </button>
-                        <a href="format_QR.csv" class="btn-submit" style="flex: 1; background-color: #95a5a6; text-decoration: none; display: flex; align-items: center; justify-content: center;" download>
+                        <a href="format/format_QR.csv" class="btn-submit" style="flex: 1; background-color: #95a5a6; text-decoration: none; display: flex; align-items: center; justify-content: center;" download>
                             <i class="fa-solid fa-file-csv" style="margin-right: 5px;"></i> Template
                         </a>
                     </div>

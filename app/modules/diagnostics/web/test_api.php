@@ -10,7 +10,7 @@ echo "<h1>Testing API Generate Jadwal</h1>";
 $files_to_check = [
     'vendor/autoload.php' => 'Composer Autoload',
     'phpqrcode/qrlib.php' => 'QR Code Library',
-    'format_mahasiswa.csv' => 'Sample CSV Format',
+    'format/format_mahasiswa.csv' => 'Sample CSV Format',
     'generate_pdf_api.php' => 'PDF API Handler',
     'api_generate_jadwal.php' => 'Old API Handler (deprecated)'
 ];
