@@ -58,10 +58,13 @@ function initializeDatabaseSchema(PDO $db)
         name TEXT NOT NULL,
         class_id INTEGER NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
+        student_status TEXT NOT NULL DEFAULT 'aktif',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (class_id) REFERENCES master_classes(id)
     )");
+
+    ensureColumnExists($db, 'master_students', 'student_status', "TEXT NOT NULL DEFAULT 'aktif'");
 
     $db->exec("CREATE TABLE IF NOT EXISTS master_subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,6 +203,7 @@ function initializeDatabaseSchema(PDO $db)
     $db->exec('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_class_id ON master_students(class_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_active_class ON master_students(is_active, class_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_master_students_status_class ON master_students(student_status, class_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_import_id ON grade_recap_results(import_id)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_nim ON grade_recap_results(nim)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_grade_recap_results_final_score ON grade_recap_results(final_score)');
@@ -216,6 +220,8 @@ function initializeDatabaseSchema(PDO $db)
     $db->exec('CREATE INDEX IF NOT EXISTS idx_master_academic_periods_year_term ON master_academic_periods(academic_year, term)');
 
     $db->exec("UPDATE grade_recap_imports SET exam_type = 'UAS' WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
+    $db->exec("UPDATE master_students SET student_status = 'aktif' WHERE student_status IS NULL OR TRIM(student_status) = ''");
+    $db->exec("UPDATE master_students SET is_active = CASE WHEN student_status IN ('cuti', 'keluar') THEN 0 ELSE 1 END");
     $db->exec('UPDATE grade_recap_results SET subject_id = (SELECT subject_id FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE subject_id IS NULL');
     $db->exec("UPDATE grade_recap_results SET exam_type = COALESCE((SELECT i.exam_type FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id), 'UAS') WHERE exam_type IS NULL OR TRIM(exam_type) = ''");
     $db->exec('UPDATE grade_recap_results SET academic_year = (SELECT i.academic_year FROM grade_recap_imports i WHERE i.id = grade_recap_results.import_id) WHERE academic_year IS NULL OR TRIM(academic_year) = ""');
@@ -258,6 +264,38 @@ function normalizeClassCode($value)
 {
     $value = preg_replace('/\s+/', ' ', sanitizeMasterName($value));
     return strtoupper($value);
+}
+
+function normalizeStudentStatus($value)
+{
+    $value = strtolower(sanitizeMasterName($value));
+    $allowedStatuses = ['aktif', 'cuti', 'tidak_naik', 'keluar'];
+
+    if (!in_array($value, $allowedStatuses, true)) {
+        return 'aktif';
+    }
+
+    return $value;
+}
+
+function isStudentStatusActive($status)
+{
+    $status = normalizeStudentStatus($status);
+    return $status === 'aktif' || $status === 'tidak_naik';
+}
+
+function normalizeStudentRow($row)
+{
+    $status = normalizeStudentStatus($row['student_status'] ?? 'aktif');
+
+    return [
+        'id' => isset($row['id']) ? (int) $row['id'] : 0,
+        'nim' => (string) ($row['nim'] ?? ''),
+        'nama' => (string) ($row['name'] ?? $row['nama'] ?? ''),
+        'class_id' => isset($row['class_id']) ? (int) $row['class_id'] : 0,
+        'student_status' => $status,
+        'is_active' => isStudentStatusActive($status) ? 1 : 0,
+    ];
 }
 
 function convertRomanToInt($value)
@@ -728,18 +766,14 @@ function loadStudentsByClassId(PDO $db, $classId)
 {
     $class = getClassById($db, $classId);
 
-    $studentsStmt = $db->prepare('SELECT id, nim, name, class_id FROM master_students WHERE class_id = :class_id AND is_active = 1 ORDER BY name ASC');
+    $studentsStmt = $db->prepare("SELECT id, nim, name, class_id, student_status, is_active FROM master_students WHERE class_id = :class_id ORDER BY CASE student_status WHEN 'aktif' THEN 1 WHEN 'tidak_naik' THEN 2 WHEN 'cuti' THEN 3 WHEN 'keluar' THEN 4 ELSE 5 END, name ASC");
     $studentsStmt->execute([':class_id' => $class['id']]);
 
     $students = [];
     foreach ($studentsStmt->fetchAll() as $row) {
-        $students[] = [
-            'id' => (int) $row['id'],
-            'nim' => $row['nim'],
-            'nama' => $row['name'],
-            'tingkat' => $class['name'],
-            'class_id' => (int) $row['class_id'],
-        ];
+        $student = normalizeStudentRow($row);
+        $student['tingkat'] = $class['name'];
+        $students[] = $student;
     }
 
     return [

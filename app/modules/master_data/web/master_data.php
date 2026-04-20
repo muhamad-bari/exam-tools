@@ -49,6 +49,13 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .modal-body { padding: 20px; display: grid; gap: 14px; }
         .modal-close { width: 36px; height: 36px; border: none; border-radius: 10px; background: #e2e8f0; color: #334155; cursor: pointer; }
         .modal-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .toolbar-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .search-input { width: min(320px, 100%); padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+        .status-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 84px; padding: 4px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .status-aktif { background: #dcfce7; color: #166534; }
+        .status-tidak_naik { background: #fef3c7; color: #92400e; }
+        .status-cuti { background: #e0f2fe; color: #075985; }
+        .status-keluar { background: #fee2e2; color: #991b1b; }
         #toast-container { position: fixed; top: 78px; right: 20px; z-index: 9999; display: grid; gap: 8px; }
         .toast { min-width: 240px; padding: 10px 14px; border-radius: 10px; color: #fff; background: #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.16); opacity: 0; transform: translateY(-10px); transition: all .25s ease; }
         .toast.show { opacity: 1; transform: translateY(0); }
@@ -129,7 +136,10 @@ require_once __DIR__ . '/../../../bootstrap.php';
                         <h2 style="margin-bottom:6px;">Ringkasan Master Data</h2>
                         <p class="muted" style="margin:0;">Preview cepat agar data siap dipakai di generator jadwal.</p>
                     </div>
-                    <button type="button" class="btn gray" onclick="loadOverview(true)"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    <div class="toolbar-group">
+                        <button type="button" class="btn green" style="flex:0 0 auto;" onclick="promoteAllClasses()"><i class="fa-solid fa-angles-up"></i> Naik Kelas Semua</button>
+                        <button type="button" class="btn gray" style="flex:0 0 auto;" onclick="loadOverview(true)"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
                 </div>
                 <div class="stats">
                     <div class="stat"><strong id="classCount">0</strong><span class="muted">Total kelas</span></div>
@@ -190,12 +200,15 @@ require_once __DIR__ . '/../../../bootstrap.php';
             <div class="modal-body">
                 <div class="modal-toolbar">
                     <button type="button" class="btn primary" style="flex:0 0 auto;" onclick="addStudentManually()"><i class="fa-solid fa-user-plus"></i> Tambah Mahasiswa</button>
-                    <button type="button" class="pager-btn" onclick="reloadClassStudentsModal()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    <div class="toolbar-group">
+                        <button type="button" class="pager-btn" onclick="reloadClassStudentsModal()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                        <input type="search" id="classStudentsSearch" class="search-input" placeholder="Cari nama atau NIM mahasiswa" oninput="handleClassStudentsSearch(this.value)">
+                    </div>
                 </div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>No</th><th>Nama</th><th>NIM</th></tr></thead>
-                        <tbody id="classStudentsModalBody"><tr><td colspan="3" style="text-align:center; color:#64748b;">Memuat data mahasiswa...</td></tr></tbody>
+                        <thead><tr><th>No</th><th>Nama</th><th>NIM</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <tbody id="classStudentsModalBody"><tr><td colspan="5" style="text-align:center; color:#64748b;">Memuat data mahasiswa...</td></tr></tbody>
                     </table>
                     <div class="table-pagination">
                         <span class="table-pagination-info" id="classStudentsModalPageInfo">Page 1 / 1</span>
@@ -220,6 +233,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
         let currentStudentModalClassId = null;
         let currentStudentModalRows = [];
         let currentStudentModalPage = 1;
+        let currentStudentModalSearchTerm = '';
 
         function escapeHtml(value) {
             return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -317,6 +331,24 @@ require_once __DIR__ . '/../../../bootstrap.php';
             return safePage;
         }
 
+        function normalizeStudentStatusInput(value) {
+            const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+            const allowedStatuses = ['aktif', 'cuti', 'tidak_naik', 'keluar'];
+            return allowedStatuses.includes(normalized) ? normalized : null;
+        }
+
+        function formatStudentStatusLabel(status) {
+            const normalized = normalizeStudentStatusInput(status) || 'aktif';
+            const labels = {
+                aktif: 'Aktif',
+                cuti: 'Cuti',
+                tidak_naik: 'Tidak Naik',
+                keluar: 'Keluar'
+            };
+
+            return `<span class="status-badge status-${normalized}">${labels[normalized]}</span>`;
+        }
+
         function renderClassTable() {
             classPage = renderPagedTable(
                 allClassRows,
@@ -330,7 +362,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     const promoteLabel = canPromote ? escapeHtml(item.next_class_name) : '<span style="color:#94a3b8;">Format belum dikenali</span>';
                     const actionButton = `<div style="display:flex; gap:6px; flex-wrap:wrap;">`
                         + `<button type="button" class="icon-btn" style="background:#475569;" onclick="openClassStudentsModal(${Number(item.id)})" title="Lihat mahasiswa"><i class="fa-solid fa-circle-exclamation"></i></button>`
-                        + `<button type="button" class="icon-btn" style="background:#2563eb;" onclick="promoteClass(${Number(item.id)})" title="Naik kelas" ${canPromote ? '' : 'disabled'}><i class="fa-solid fa-arrow-up-right-dots"></i></button>`
+                        + `<button type="button" class="icon-btn" style="background:#2563eb;" onclick="promoteClass(${Number(item.id)})" title="Naik kelas" ${canPromote ? '' : 'disabled'}><i class="fa-solid fa-arrow-up"></i></button>`
                         + `<button type="button" class="icon-btn" style="background:#f59e0b;" onclick="editClass(${Number(item.id)})" title="Edit kelas"><i class="fa-solid fa-pen"></i></button>`
                         + `<button type="button" class="icon-btn" style="background:#dc2626;" onclick="deleteClass(${Number(item.id)})" title="Hapus kelas"><i class="fa-solid fa-trash"></i></button>`
                         + `</div>`;
@@ -463,11 +495,36 @@ require_once __DIR__ . '/../../../bootstrap.php';
             currentStudentModalClassId = null;
             currentStudentModalRows = [];
             currentStudentModalPage = 1;
+            currentStudentModalSearchTerm = '';
+            document.getElementById('classStudentsSearch').value = '';
+        }
+
+        function getCurrentStudentModalRows() {
+            if (!currentStudentModalSearchTerm) {
+                return currentStudentModalRows;
+            }
+
+            const keyword = currentStudentModalSearchTerm.toLowerCase();
+            return currentStudentModalRows.filter(item => {
+                return String(item.nama || '').toLowerCase().includes(keyword)
+                    || String(item.nim || '').toLowerCase().includes(keyword);
+            });
+        }
+
+        function getStudentRowById(studentId) {
+            return currentStudentModalRows.find(item => String(item.id) === String(studentId)) || null;
+        }
+
+        function handleClassStudentsSearch(value) {
+            currentStudentModalSearchTerm = String(value || '').trim();
+            currentStudentModalPage = 1;
+            renderClassStudentsModalBody();
         }
 
         function renderClassStudentsModalBody() {
+            const filteredRows = getCurrentStudentModalRows();
             currentStudentModalPage = renderPagedTable(
-                currentStudentModalRows,
+                filteredRows,
                 'classStudentsModalBody',
                 'classStudentsModalPageInfo',
                 'classStudentsModalPrevBtn',
@@ -475,9 +532,13 @@ require_once __DIR__ . '/../../../bootstrap.php';
                 currentStudentModalPage,
                 (item, index, startIndex) => {
                     const rowNumber = startIndex + index + 1;
-                    return `<tr><td>${rowNumber}</td><td>${escapeHtml(item.nama)}</td><td>${escapeHtml(item.nim)}</td></tr>`;
+                    const actionButtons = `<div style="display:flex; gap:6px; flex-wrap:wrap;">`
+                        + `<button type="button" class="icon-btn" style="background:#f59e0b;" onclick="editStudent(${Number(item.id)})" title="Edit mahasiswa"><i class="fa-solid fa-pen"></i></button>`
+                        + `<button type="button" class="icon-btn" style="background:#dc2626;" onclick="deleteStudent(${Number(item.id)})" title="Hapus mahasiswa"><i class="fa-solid fa-trash"></i></button>`
+                        + `</div>`;
+                    return `<tr><td>${rowNumber}</td><td>${escapeHtml(item.nama)}</td><td>${escapeHtml(item.nim)}</td><td>${formatStudentStatusLabel(item.student_status)}</td><td>${actionButtons}</td></tr>`;
                 },
-                '<tr><td colspan="3" style="text-align:center; color:#64748b;">Belum ada mahasiswa di kelas ini.</td></tr>',
+                '<tr><td colspan="5" style="text-align:center; color:#64748b;">Tidak ada mahasiswa yang cocok.</td></tr>',
                 studentModalPageSize
             );
         }
@@ -493,7 +554,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
             const prevBtn = document.getElementById('classStudentsModalPrevBtn');
             const nextBtn = document.getElementById('classStudentsModalNextBtn');
 
-            body.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#64748b;">${escapeHtml(message)}</td></tr>`;
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b;">${escapeHtml(message)}</td></tr>`;
             pageInfo.textContent = 'Page 1 / 1';
             prevBtn.disabled = true;
             nextBtn.disabled = true;
@@ -505,7 +566,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
             const prevBtn = document.getElementById('classStudentsModalPrevBtn');
             const nextBtn = document.getElementById('classStudentsModalNextBtn');
 
-            body.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#dc2626;">${escapeHtml(message)}</td></tr>`;
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#dc2626;">${escapeHtml(message)}</td></tr>`;
             pageInfo.textContent = 'Page 1 / 1';
             prevBtn.disabled = true;
             nextBtn.disabled = true;
@@ -529,7 +590,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     currentStudentModalRows = rows;
                     currentStudentModalPage = 1;
                     document.getElementById('classStudentsModalTitle').textContent = `Mahasiswa ${res.class.name}`;
-                    document.getElementById('classStudentsModalInfo').textContent = `${rows.length} mahasiswa aktif di kelas ini`;
+                    document.getElementById('classStudentsModalInfo').textContent = `${rows.length} mahasiswa tercatat di kelas ini`;
                     renderClassStudentsModalBody();
                 })
                 .catch(error => {
@@ -581,13 +642,25 @@ require_once __DIR__ . '/../../../bootstrap.php';
                 return;
             }
 
+            const statusInput = prompt('Status mahasiswa: aktif, cuti, tidak_naik, keluar', 'aktif');
+            if (statusInput === null) {
+                return;
+            }
+
+            const normalizedStatus = normalizeStudentStatusInput(statusInput);
+            if (!normalizedStatus) {
+                showToast('Status mahasiswa tidak valid', 'error');
+                return;
+            }
+
             fetch('index.php?api=master_data&action=create_student', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     class_id: currentStudentModalClassId,
                     name: normalizedName,
-                    nim: normalizedNim
+                    nim: normalizedNim,
+                    student_status: normalizedStatus
                 })
             })
                 .then(r => r.json())
@@ -600,6 +673,121 @@ require_once __DIR__ . '/../../../bootstrap.php';
                         loadOverview(true),
                         reloadClassStudentsModal()
                     ]).then(() => showToast(`Mahasiswa ditambahkan: ${res.data.nama}`));
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function buildClassListPrompt() {
+            return allClassRows.map(item => `${item.id}: ${item.name}`).join('\n');
+        }
+
+        function editStudent(studentId) {
+            const student = getStudentRowById(studentId);
+            if (!student) {
+                showToast('Data mahasiswa tidak ditemukan', 'error');
+                return;
+            }
+
+            const nextName = prompt('Nama mahasiswa:', student.nama || '');
+            if (nextName === null) {
+                return;
+            }
+
+            const normalizedName = nextName.trim();
+            if (!normalizedName) {
+                showToast('Nama mahasiswa wajib diisi', 'error');
+                return;
+            }
+
+            const nextNim = prompt('NIM mahasiswa:', student.nim || '');
+            if (nextNim === null) {
+                return;
+            }
+
+            const normalizedNim = nextNim.trim();
+            if (!normalizedNim) {
+                showToast('NIM mahasiswa wajib diisi', 'error');
+                return;
+            }
+
+            const classInput = prompt(`Pindah ke ID kelas berikut:\n${buildClassListPrompt()}`, String(student.class_id || ''));
+            if (classInput === null) {
+                return;
+            }
+
+            const normalizedClassId = Number(String(classInput).trim());
+            if (!normalizedClassId || !getClassRowById(normalizedClassId)) {
+                showToast('ID kelas tujuan tidak valid', 'error');
+                return;
+            }
+
+            const statusInput = prompt('Status mahasiswa: aktif, cuti, tidak_naik, keluar', student.student_status || 'aktif');
+            if (statusInput === null) {
+                return;
+            }
+
+            const normalizedStatus = normalizeStudentStatusInput(statusInput);
+            if (!normalizedStatus) {
+                showToast('Status mahasiswa tidak valid', 'error');
+                return;
+            }
+
+            fetch('index.php?api=master_data&action=update_student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    class_id: normalizedClassId,
+                    name: normalizedName,
+                    nim: normalizedNim,
+                    student_status: normalizedStatus
+                })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Edit mahasiswa gagal');
+                    }
+
+                    return loadOverview(true).then(() => {
+                        if (String(normalizedClassId) !== String(currentStudentModalClassId)) {
+                            closeClassStudentsModal();
+                            showToast(`Mahasiswa dipindahkan ke ${res.data.class_name}`);
+                            return;
+                        }
+
+                        return reloadClassStudentsModal().then(() => showToast(`Mahasiswa diperbarui: ${res.data.nama}`));
+                    });
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function deleteStudent(studentId) {
+            const student = getStudentRowById(studentId);
+            if (!student) {
+                showToast('Data mahasiswa tidak ditemukan', 'error');
+                return;
+            }
+
+            if (!confirm(`Hapus mahasiswa ${student.nama} (${student.nim})?`)) {
+                return;
+            }
+
+            fetch('index.php?api=master_data&action=delete_student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: studentId })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Hapus mahasiswa gagal');
+                    }
+
+                    return Promise.all([
+                        loadOverview(true),
+                        reloadClassStudentsModal()
+                    ]).then(() => showToast(`Mahasiswa dihapus: ${res.data.nama}`));
                 })
                 .catch(error => showToast(error.message, 'error'));
         }
@@ -653,7 +841,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
 
             const studentCount = Number(classRow.student_count || 0);
             const message = studentCount > 0
-                ? `Pindahkan ${studentCount} mahasiswa aktif dari ${classRow.name} ke ${classRow.next_class_name}?`
+                ? `Pindahkan mahasiswa berstatus aktif dari ${classRow.name} ke ${classRow.next_class_name}? Mahasiswa cuti, keluar, dan tidak_naik akan tetap di kelas sekarang.`
                 : `Kelas ${classRow.name} belum punya mahasiswa aktif. Tetap buat atau sinkronkan kelas tujuan ${classRow.next_class_name}?`;
 
             if (!confirm(message)) {
@@ -674,6 +862,37 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     const movedStudents = Number(res.data && res.data.moved_students ? res.data.moved_students : 0);
                     return loadOverview(true).then(() => {
                         showToast(`Naik kelas selesai: ${movedStudents} mahasiswa dipindahkan ke ${res.data.target_class.name}`);
+                    });
+                })
+                .catch(error => showToast(error.message, 'error'));
+        }
+
+        function promoteAllClasses() {
+            const eligibleClassCount = allClassRows.filter(item => !!item.next_class_name).length;
+            if (!eligibleClassCount) {
+                showToast('Belum ada kelas terstruktur yang bisa dipromosikan', 'error');
+                return;
+            }
+
+            const totalStudents = allClassRows.reduce((sum, item) => sum + Number(item.student_count || 0), 0);
+            const message = `Naikkan semua kelas terstruktur sekarang? Mahasiswa berstatus aktif akan dipindahkan, sedangkan cuti, keluar, dan tidak_naik tetap di kelas semula.\n\nKelas diproses: ${eligibleClassCount}\nTotal mahasiswa aktif terhitung: ${totalStudents}`;
+            if (!confirm(message)) {
+                return;
+            }
+
+            fetch('index.php?api=master_data&action=promote_all_classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        throw new Error(res.message || 'Naik kelas semua gagal');
+                    }
+
+                    return loadOverview(true).then(() => {
+                        showToast(`Naik kelas semua selesai: ${res.data.moved_students} mahasiswa dipindahkan dari ${res.data.processed_classes} kelas`);
                     });
                 })
                 .catch(error => showToast(error.message, 'error'));

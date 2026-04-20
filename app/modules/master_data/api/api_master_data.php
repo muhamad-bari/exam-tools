@@ -95,6 +95,7 @@ try {
         $classId = intval($input['class_id'] ?? 0);
         $name = sanitizeMasterName($input['name'] ?? '');
         $nim = sanitizeMasterName($input['nim'] ?? '');
+        $studentStatus = normalizeStudentStatus($input['student_status'] ?? 'aktif');
 
         if ($classId <= 0) {
             throw new RuntimeException('Class ID tidak valid');
@@ -111,11 +112,13 @@ try {
             throw new RuntimeException('NIM sudah terdaftar di master mahasiswa');
         }
 
-        $insertStmt = $db->prepare('INSERT INTO master_students (nim, name, class_id, is_active) VALUES (:nim, :name, :class_id, 1)');
+        $insertStmt = $db->prepare('INSERT INTO master_students (nim, name, class_id, is_active, student_status) VALUES (:nim, :name, :class_id, :is_active, :student_status)');
         $insertStmt->execute([
             ':nim' => $nim,
             ':name' => $name,
             ':class_id' => $class['id'],
+            ':is_active' => isStudentStatusActive($studentStatus) ? 1 : 0,
+            ':student_status' => $studentStatus,
         ]);
 
         echo json_encode([
@@ -127,6 +130,7 @@ try {
                 'nama' => $name,
                 'class_id' => $class['id'],
                 'class_name' => $class['name'],
+                'student_status' => $studentStatus,
             ],
         ]);
         exit;
@@ -143,7 +147,7 @@ try {
         try {
             $targetClass = getOrCreateClass($db, $targetClassData['name']);
 
-            $updateStmt = $db->prepare('UPDATE master_students SET class_id = :target_class_id, updated_at = CURRENT_TIMESTAMP WHERE class_id = :source_class_id AND is_active = 1');
+            $updateStmt = $db->prepare("UPDATE master_students SET class_id = :target_class_id, updated_at = CURRENT_TIMESTAMP WHERE class_id = :source_class_id AND student_status = 'aktif'");
             $updateStmt->execute([
                 ':target_class_id' => $targetClass['id'],
                 ':source_class_id' => $sourceClass['id'],
@@ -166,6 +170,141 @@ try {
                 'target_class' => $targetClass,
                 'moved_students' => $movedStudents,
             ],
+        ]);
+        exit;
+    }
+
+    if ($action === 'promote_all_classes') {
+        ensurePostRequest();
+        $classes = getClassesWithCounts($db);
+        $eligibleClasses = [];
+        $studentIdsBySourceClass = [];
+
+        foreach ($classes as $class) {
+            if (!empty($class['next_class_name'])) {
+                $eligibleClasses[] = $class;
+                $studentIdsBySourceClass[(int) $class['id']] = getPromotableStudentIdsByClass($db, $class['id']);
+            }
+        }
+
+        if (!$eligibleClasses) {
+            throw new RuntimeException('Tidak ada kelas dengan format terstruktur yang bisa dipromosikan');
+        }
+
+        $db->beginTransaction();
+        try {
+            $movedStudents = 0;
+            $processedClasses = 0;
+            $createdTargetClasses = 0;
+
+            foreach ($eligibleClasses as $sourceClass) {
+                $targetClassData = calculateNextStructuredClass($sourceClass);
+                $existingTargetClass = findClassByCodeOrName($db, $targetClassData['name'], $targetClassData['name']);
+                $targetClass = getOrCreateClass($db, $targetClassData['name']);
+                if ($existingTargetClass === null) {
+                    $createdTargetClasses++;
+                }
+
+                $sourceStudentIds = $studentIdsBySourceClass[(int) $sourceClass['id']] ?? [];
+                $movedStudents += moveStudentsToClass($db, $sourceStudentIds, $targetClass['id']);
+                $processedClasses++;
+            }
+
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $e;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Naik kelas semua selesai',
+            'data' => [
+                'processed_classes' => $processedClasses,
+                'moved_students' => $movedStudents,
+                'created_target_classes' => $createdTargetClasses,
+            ],
+        ]);
+        exit;
+    }
+
+    if ($action === 'update_student') {
+        ensurePostRequest();
+        $input = readJsonInput();
+        $studentId = intval($input['student_id'] ?? 0);
+        $classId = intval($input['class_id'] ?? 0);
+        $name = sanitizeMasterName($input['name'] ?? '');
+        $nim = sanitizeMasterName($input['nim'] ?? '');
+        $studentStatus = normalizeStudentStatus($input['student_status'] ?? 'aktif');
+
+        if ($studentId <= 0) {
+            throw new RuntimeException('ID mahasiswa tidak valid');
+        }
+
+        if ($classId <= 0) {
+            throw new RuntimeException('Class ID tidak valid');
+        }
+
+        if ($name === '' || $nim === '') {
+            throw new RuntimeException('Nama dan NIM mahasiswa wajib diisi');
+        }
+
+        $student = getStudentById($db, $studentId);
+        $class = getClassById($db, $classId);
+
+        $duplicateStmt = $db->prepare('SELECT id FROM master_students WHERE nim = :nim AND id != :id LIMIT 1');
+        $duplicateStmt->execute([
+            ':nim' => $nim,
+            ':id' => $studentId,
+        ]);
+        if ($duplicateStmt->fetch()) {
+            throw new RuntimeException('NIM sudah terdaftar di master mahasiswa');
+        }
+
+        $updateStmt = $db->prepare('UPDATE master_students SET nim = :nim, name = :name, class_id = :class_id, student_status = :student_status, is_active = :is_active, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+        $updateStmt->execute([
+            ':nim' => $nim,
+            ':name' => $name,
+            ':class_id' => $class['id'],
+            ':student_status' => $studentStatus,
+            ':is_active' => isStudentStatusActive($studentStatus) ? 1 : 0,
+            ':id' => $student['id'],
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Mahasiswa berhasil diperbarui',
+            'data' => [
+                'id' => $student['id'],
+                'nim' => $nim,
+                'nama' => $name,
+                'class_id' => $class['id'],
+                'class_name' => $class['name'],
+                'student_status' => $studentStatus,
+            ],
+        ]);
+        exit;
+    }
+
+    if ($action === 'delete_student') {
+        ensurePostRequest();
+        $input = readJsonInput();
+        $studentId = intval($input['student_id'] ?? 0);
+
+        if ($studentId <= 0) {
+            throw new RuntimeException('ID mahasiswa tidak valid');
+        }
+
+        $student = getStudentById($db, $studentId);
+        $deleteStmt = $db->prepare('DELETE FROM master_students WHERE id = :id');
+        $deleteStmt->execute([':id' => $student['id']]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Mahasiswa berhasil dihapus',
+            'data' => $student,
         ]);
         exit;
     }
@@ -316,7 +455,7 @@ try {
                 $existingStudent = $findStmt->fetch();
 
                 if ($existingStudent) {
-                    $updateStmt = $db->prepare('UPDATE master_students SET name = :name, class_id = :class_id, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $updateStmt = $db->prepare("UPDATE master_students SET name = :name, class_id = :class_id, student_status = 'aktif', is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id");
                     $updateStmt->execute([
                         ':name' => $student['nama'],
                         ':class_id' => $class['id'],
@@ -324,7 +463,7 @@ try {
                     ]);
                     $updatedStudents++;
                 } else {
-                    $insertStmt = $db->prepare('INSERT INTO master_students (nim, name, class_id, is_active) VALUES (:nim, :name, :class_id, 1)');
+                    $insertStmt = $db->prepare("INSERT INTO master_students (nim, name, class_id, is_active, student_status) VALUES (:nim, :name, :class_id, 1, 'aktif')");
                     $insertStmt->execute([
                         ':nim' => $student['nim'],
                         ':name' => $student['nama'],
@@ -548,4 +687,57 @@ function updateClass(PDO $db, $classId, $name, $code = '')
     $updatedClass['student_count'] = $currentClass['student_count'] ?? 0;
 
     return $updatedClass;
+}
+
+function getStudentById(PDO $db, $studentId)
+{
+    $studentId = intval($studentId);
+    if ($studentId <= 0) {
+        throw new RuntimeException('ID mahasiswa tidak valid');
+    }
+
+    $stmt = $db->prepare('SELECT id, nim, name, class_id, student_status, is_active FROM master_students WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $studentId]);
+    $student = $stmt->fetch();
+
+    if (!$student) {
+        throw new RuntimeException('Mahasiswa tidak ditemukan');
+    }
+
+    $normalizedStudent = normalizeStudentRow($student);
+    $class = getClassById($db, $normalizedStudent['class_id']);
+    $normalizedStudent['class_name'] = $class['name'];
+
+    return $normalizedStudent;
+}
+
+function getPromotableStudentIdsByClass(PDO $db, $classId)
+{
+    $stmt = $db->prepare("SELECT id FROM master_students WHERE class_id = :class_id AND student_status = 'aktif' ORDER BY id ASC");
+    $stmt->execute([':class_id' => intval($classId)]);
+
+    return array_map(static function ($row) {
+        return (int) $row['id'];
+    }, $stmt->fetchAll());
+}
+
+function moveStudentsToClass(PDO $db, array $studentIds, $targetClassId)
+{
+    if (!$studentIds) {
+        return 0;
+    }
+
+    $placeholders = [];
+    $params = [':target_class_id' => intval($targetClassId)];
+
+    foreach (array_values($studentIds) as $index => $studentId) {
+        $placeholder = ':student_id_' . $index;
+        $placeholders[] = $placeholder;
+        $params[$placeholder] = (int) $studentId;
+    }
+
+    $updateStmt = $db->prepare('UPDATE master_students SET class_id = :target_class_id, updated_at = CURRENT_TIMESTAMP WHERE id IN (' . implode(', ', $placeholders) . ')');
+    $updateStmt->execute($params);
+
+    return $updateStmt->rowCount();
 }
