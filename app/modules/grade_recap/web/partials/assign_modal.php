@@ -37,3 +37,30 @@
         </div>
     </div>
 </div>
+<div class="modal-backdrop" id="inactiveStudentsModal" onclick="handleInactiveStudentsModalBackdrop(event)">
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <h3 style="margin:0; color:#0f172a;"><i class="fa-solid fa-user-lock"></i> Mahasiswa Nonaktif</h3>
+                <p class="muted" id="inactiveStudentsModalInfo" style="margin:6px 0 0;">Mahasiswa ini terdeteksi di master data tetapi statusnya belum aktif untuk ikut rekap.</p>
+            </div>
+            <button type="button" class="btn gray" onclick="closeInactiveStudentsModal()"><i class="fa-solid fa-xmark"></i> Tutup</button>
+        </div>
+        <div class="modal-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:160px;">NIM</th>
+                        <th>Nama</th>
+                        <th style="width:130px;">Status</th>
+                        <th style="width:180px;">Kelas Terakhir</th>
+                        <th>Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody id="inactiveStudentsBody">
+                    <tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada mahasiswa nonaktif.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

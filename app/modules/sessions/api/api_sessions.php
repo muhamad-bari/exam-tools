@@ -303,3 +303,16 @@ try {
         'message' => $e->getMessage(),
     ]);
 }
+
+function ensurePostRequest()
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        throw new RuntimeException('Invalid request method');
+    }
+}
+
+function readJsonInput()
+{
+    $input = json_decode(file_get_contents('php://input'), true);
+    return is_array($input) ? $input : [];
+}

@@ -104,6 +104,7 @@ function initializeDatabaseSchema(PDO $db)
     ensureColumnExists($db, 'grade_recap_imports', 'duplicate_nim_rows', 'INTEGER NOT NULL DEFAULT 0');
     ensureColumnExists($db, 'grade_recap_imports', 'matched_students', 'INTEGER NOT NULL DEFAULT 0');
     ensureColumnExists($db, 'grade_recap_imports', 'unmatched_students', 'INTEGER NOT NULL DEFAULT 0');
+    ensureColumnExists($db, 'grade_recap_imports', 'inactive_students', 'INTEGER NOT NULL DEFAULT 0');
     ensureColumnExists($db, 'grade_recap_imports', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
     ensureColumnExists($db, 'grade_recap_imports', 'subject_id', 'INTEGER DEFAULT NULL');
     ensureColumnExists($db, 'grade_recap_imports', 'exam_type', 'TEXT NOT NULL DEFAULT "UAS"');

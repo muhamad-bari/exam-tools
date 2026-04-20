@@ -19,9 +19,12 @@ function renderPagedTable() {
 
     body.innerHTML = visibleRows.map((item, index) => {
         const classLabel = item.kelas ? escapeHtml(item.kelas) : `<span class="muted">${escapeHtml(item.master_class || 'Tidak ada')}</span>`;
-        const masterBadge = item.matched_master
-            ? '<span class="badge success">Cocok</span>'
-            : '<span class="badge warn">Belum ada</span>';
+        let masterBadge = '<span class="badge warn">Belum ada</span>';
+        if (String(item.master_match_type || '') === 'active') {
+            masterBadge = '<span class="badge success">Cocok aktif</span>';
+        } else if (String(item.master_match_type || '') === 'inactive') {
+            masterBadge = `<span class="badge info" title="${escapeHtml(item.recap_block_reason || '')}">Nonaktif</span>`;
+        }
 
         const normalCell = `${escapeHtml(item.normal_bs || '-')} · ${formatNumber(item.normal_score)} · ${escapeHtml(item.normal_letter || '-')}`;
         const remedialCell = `${escapeHtml(item.remedial_bs || '-')} · ${formatNumber(item.remedial_score)} · ${escapeHtml(item.remedial_letter || '-')}`;
@@ -66,6 +69,7 @@ function resetGradeRecap() {
     allGradeRows = [];
     gradePage = 1;
     currentImportId = null;
+    currentRecapSummary = null;
     selectedSubject = null;
     selectedExamType = null;
     selectedAcademicYear = null;
@@ -89,12 +93,14 @@ function resetGradeRecap() {
     document.getElementById('avgFinal').textContent = '-';
     document.getElementById('matchedStudents').textContent = '0';
     document.getElementById('unmatchedStudents').textContent = '0';
+    document.getElementById('inactiveStudents').textContent = '0';
     document.getElementById('duplicateRows').textContent = '0';
     assignSelectedNims = new Set();
     assignFailedByNim = {};
     renderFixedColumns({});
     renderDistribution([]);
     renderPagedTable();
+    closeInactiveStudentsModal();
     updateAssignButtonState();
     updateOpenDetailButtonState();
     updateUploadButtonState();

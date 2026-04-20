@@ -508,14 +508,17 @@ function calculateAverage(array $values)
 
 function loadStudentLookupByNim(PDO $db)
 {
-    $stmt = $db->query('SELECT s.id, s.nim, s.name, c.name AS class_name FROM master_students s LEFT JOIN master_classes c ON c.id = s.class_id WHERE s.is_active = 1');
+    $stmt = $db->query('SELECT s.id, s.nim, s.name, s.is_active, s.student_status, c.name AS class_name FROM master_students s LEFT JOIN master_classes c ON c.id = s.class_id');
     $lookup = [];
 
     foreach ($stmt->fetchAll() as $row) {
+        $status = normalizeStudentStatus($row['student_status'] ?? 'aktif');
         $lookup[(string) $row['nim']] = [
             'id' => (int) $row['id'],
             'name' => $row['name'],
             'class_name' => $row['class_name'] ?? '',
+            'student_status' => $status,
+            'is_active' => (int) ($row['is_active'] ?? 0),
         ];
     }
 
@@ -642,17 +645,21 @@ function persistProcessedGradeRecapFile(PDO $db, array $context, array $processe
 {
     $summary = $processed['summary'] ?? [];
     $resultRows = $processed['data'] ?? [];
+    $persistableRows = array_values(array_filter($resultRows, static function ($row) {
+        return empty($row['recap_blocked']);
+    }));
 
-    $importStmt = $db->prepare('INSERT INTO grade_recap_imports (file_name, sheet_name, total_rows, valid_rows, invalid_rows, duplicate_nim_rows, matched_students, unmatched_students, subject_id, exam_type, academic_year, term, updated_at) VALUES (:file_name, :sheet_name, :total_rows, :valid_rows, :invalid_rows, :duplicate_nim_rows, :matched_students, :unmatched_students, :subject_id, :exam_type, :academic_year, :term, CURRENT_TIMESTAMP)');
+    $importStmt = $db->prepare('INSERT INTO grade_recap_imports (file_name, sheet_name, total_rows, valid_rows, invalid_rows, duplicate_nim_rows, matched_students, unmatched_students, inactive_students, subject_id, exam_type, academic_year, term, updated_at) VALUES (:file_name, :sheet_name, :total_rows, :valid_rows, :invalid_rows, :duplicate_nim_rows, :matched_students, :unmatched_students, :inactive_students, :subject_id, :exam_type, :academic_year, :term, CURRENT_TIMESTAMP)');
     $importStmt->execute([
         ':file_name' => (string) ($processed['file_name'] ?? 'nilai.xlsx'),
         ':sheet_name' => (string) ($processed['sheet_name'] ?? 'Worksheet'),
-        ':total_rows' => (int) ($summary['unique_nim_rows'] ?? count($resultRows)),
+        ':total_rows' => (int) ($summary['total_rows'] ?? count($persistableRows)),
         ':valid_rows' => (int) ($summary['valid_rows'] ?? 0),
         ':invalid_rows' => (int) ($summary['invalid_rows'] ?? 0),
         ':duplicate_nim_rows' => (int) ($summary['duplicate_nim_rows'] ?? 0),
         ':matched_students' => (int) ($summary['matched_students'] ?? 0),
         ':unmatched_students' => (int) ($summary['unmatched_students'] ?? 0),
+        ':inactive_students' => (int) ($summary['inactive_students'] ?? 0),
         ':subject_id' => (int) $context['subject_id'],
         ':exam_type' => $context['exam_type'],
         ':academic_year' => $context['academic_year'],
@@ -662,7 +669,7 @@ function persistProcessedGradeRecapFile(PDO $db, array $context, array $processe
 
     $resultStmt = $db->prepare('INSERT INTO grade_recap_results (import_id, subject_id, exam_type, academic_year, term, nim, source_name, student_id, student_name, class_name, normal_bs, normal_score, normal_letter, remedial_bs, remedial_score, remedial_letter, susulan_bs, susulan_score, susulan_letter, final_bs, final_score, final_letter, duplicate_nim_count, updated_at) VALUES (:import_id, :subject_id, :exam_type, :academic_year, :term, :nim, :source_name, :student_id, :student_name, :class_name, :normal_bs, :normal_score, :normal_letter, :remedial_bs, :remedial_score, :remedial_letter, :susulan_bs, :susulan_score, :susulan_letter, :final_bs, :final_score, :final_letter, :duplicate_nim_count, CURRENT_TIMESTAMP) ON CONFLICT(import_id, nim) DO UPDATE SET subject_id = excluded.subject_id, exam_type = excluded.exam_type, academic_year = excluded.academic_year, term = excluded.term, source_name = excluded.source_name, student_id = excluded.student_id, student_name = excluded.student_name, class_name = excluded.class_name, normal_bs = excluded.normal_bs, normal_score = excluded.normal_score, normal_letter = excluded.normal_letter, remedial_bs = excluded.remedial_bs, remedial_score = excluded.remedial_score, remedial_letter = excluded.remedial_letter, susulan_bs = excluded.susulan_bs, susulan_score = excluded.susulan_score, susulan_letter = excluded.susulan_letter, final_bs = excluded.final_bs, final_score = excluded.final_score, final_letter = excluded.final_letter, duplicate_nim_count = excluded.duplicate_nim_count, updated_at = CURRENT_TIMESTAMP');
 
-    foreach ($resultRows as $row) {
+    foreach ($persistableRows as $row) {
         $resultStmt->execute([
             ':import_id' => $importId,
             ':subject_id' => (int) $context['subject_id'],
@@ -771,6 +778,8 @@ function buildRecapRowsFromSheetRows(array $rows, array $studentLookup)
         unset($record['_seen_rows']);
 
         $masterStudent = $studentLookup[$nim] ?? null;
+        $masterMatchType = determineMasterMatchType($masterStudent);
+        $recapBlocked = $masterMatchType === 'inactive';
         $rowsByNim[$nim] = [
             'nim' => $nim,
             'nama' => $masterStudent['name'] ?? $record['source_name'],
@@ -790,8 +799,12 @@ function buildRecapRowsFromSheetRows(array $rows, array $studentLookup)
             'final_letter' => $record['final_letter'],
             'duplicate_nim_count' => $record['duplicate_nim_count'],
             'final_bs' => $record['final_bs'],
-            'matched_master' => $masterStudent !== null,
+            'matched_master' => $masterMatchType === 'active',
+            'master_match_type' => $masterMatchType,
             'student_id' => $masterStudent['id'] ?? null,
+            'student_status' => $masterStudent['student_status'] ?? '',
+            'recap_blocked' => $recapBlocked,
+            'recap_block_reason' => $recapBlocked ? buildInactiveStudentRecapMessage($masterStudent) : '',
         ];
     }
 
@@ -848,8 +861,18 @@ function mergeBulkRecapRow(array $existing, array $incoming)
     if (($merged['student_id'] ?? null) === null && ($incoming['student_id'] ?? null) !== null) {
         $merged['student_id'] = $incoming['student_id'];
     }
+    if (($merged['student_status'] ?? '') === '' && ($incoming['student_status'] ?? '') !== '') {
+        $merged['student_status'] = $incoming['student_status'];
+    }
+    if (($merged['master_match_type'] ?? '') === '' && ($incoming['master_match_type'] ?? '') !== '') {
+        $merged['master_match_type'] = $incoming['master_match_type'];
+    }
+    if (empty($merged['recap_block_reason']) && !empty($incoming['recap_block_reason'])) {
+        $merged['recap_block_reason'] = $incoming['recap_block_reason'];
+    }
 
     $merged['matched_master'] = !empty($merged['matched_master']) || !empty($incoming['matched_master']);
+    $merged['recap_blocked'] = !empty($merged['recap_blocked']) || !empty($incoming['recap_blocked']);
     $merged['duplicate_nim_count'] = (int) ($merged['duplicate_nim_count'] ?? 0) + (int) ($incoming['duplicate_nim_count'] ?? 0) + 1;
 
     $merged['final_score'] = maxScore($merged['normal_score'] ?? null, $merged['remedial_score'] ?? null, $merged['susulan_score'] ?? null);
@@ -867,10 +890,21 @@ function buildRecapResponseSummary(array $resultRows, array $stats)
     $susulanValues = [];
     $finalValues = [];
     $matchedStudents = 0;
+    $unmatchedStudents = 0;
+    $inactiveStudents = 0;
 
     foreach ($resultRows as $row) {
-        if (!empty($row['matched_master'])) {
+        $matchType = (string) ($row['master_match_type'] ?? 'not_found');
+        if ($matchType === 'active') {
             $matchedStudents++;
+        } elseif ($matchType === 'inactive') {
+            $inactiveStudents++;
+        } else {
+            $unmatchedStudents++;
+        }
+
+        if (!empty($row['recap_blocked'])) {
+            continue;
         }
 
         if ($row['normal_score'] !== null) {
@@ -903,9 +937,10 @@ function buildRecapResponseSummary(array $resultRows, array $stats)
     }
 
     $rowCount = count($resultRows);
+    $participatingRowCount = $matchedStudents + $unmatchedStudents;
 
     return [
-        'total_rows' => (int) ($stats['valid_rows'] ?? 0),
+        'total_rows' => $participatingRowCount,
         'unique_nim_rows' => $rowCount,
         'source_rows' => (int) ($stats['source_rows'] ?? 0),
         'valid_rows' => (int) ($stats['valid_rows'] ?? 0),
@@ -917,7 +952,8 @@ function buildRecapResponseSummary(array $resultRows, array $stats)
             'susulan' => (int) ($stats['category_rows']['susulan'] ?? 0),
         ],
         'matched_students' => $matchedStudents,
-        'unmatched_students' => $rowCount - $matchedStudents,
+        'unmatched_students' => $unmatchedStudents,
+        'inactive_students' => $inactiveStudents,
         'avg_normal' => calculateAverage($normalValues),
         'avg_remedial' => calculateAverage($remedialValues),
         'avg_susulan' => calculateAverage($susulanValues),
@@ -926,6 +962,26 @@ function buildRecapResponseSummary(array $resultRows, array $stats)
         'lowest_final' => $finalValues ? min($finalValues) : null,
         'class_distribution' => $classDistribution,
     ];
+}
+
+function determineMasterMatchType($masterStudent)
+{
+    if (!is_array($masterStudent)) {
+        return 'not_found';
+    }
+
+    $status = normalizeStudentStatus($masterStudent['student_status'] ?? 'aktif');
+    return isStudentStatusActive($status) ? 'active' : 'inactive';
+}
+
+function buildInactiveStudentRecapMessage($masterStudent)
+{
+    if (!is_array($masterStudent)) {
+        return '';
+    }
+
+    $status = normalizeStudentStatus($masterStudent['student_status'] ?? 'aktif');
+    return 'Mahasiswa berstatus ' . $status . ' di master data, jadi tidak ikut rekap sampai diaktifkan kembali.';
 }
 
 function getLatestRecapImport(PDO $db, array $filters = [])

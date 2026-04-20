@@ -164,6 +164,50 @@ function updateSelectedFileInfo() {
     updateClearGradeFileButtonState();
 }
 
+function formatStudentStatusLabel(status) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (!normalized) {
+        return '-';
+    }
+
+    if (normalized === 'tidak_naik') {
+        return 'Tidak Naik';
+    }
+
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function renderInactiveStudentsModal(rows) {
+    const body = document.getElementById('inactiveStudentsBody');
+    const info = document.getElementById('inactiveStudentsModalInfo');
+    const inactiveRows = Array.isArray(rows) ? rows : [];
+
+    if (!inactiveRows.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada mahasiswa nonaktif.</td></tr>';
+        info.textContent = 'Mahasiswa nonaktif akan muncul di sini jika terdeteksi pada template upload.';
+        return;
+    }
+
+    info.textContent = `${inactiveRows.length} mahasiswa ditemukan di master data, tetapi statusnya nonaktif sehingga tidak ikut rekap. Aktifkan dulu dari Master Data lalu upload ulang file.`;
+    body.innerHTML = inactiveRows.map((item) => `
+        <tr>
+            <td>${escapeHtml(item.nim || '')}</td>
+            <td>${escapeHtml(item.nama || item.source_name || '')}</td>
+            <td>${escapeHtml(formatStudentStatusLabel(item.student_status))}</td>
+            <td>${escapeHtml(item.master_class || item.kelas || '-')}</td>
+            <td>${escapeHtml(item.recap_block_reason || 'Mahasiswa nonaktif tidak ikut rekap.')}</td>
+        </tr>
+    `).join('');
+}
+
+function openInactiveStudentsModal() {
+    renderInactiveStudentsModal(getInactiveRows());
+    const modal = document.getElementById('inactiveStudentsModal');
+    if (modal) {
+        modal.classList.add('open');
+    }
+}
+
 function uploadGradeRecap() {
     const files = getSelectedGradeFiles();
     if (!files.length) {
@@ -212,6 +256,7 @@ function uploadGradeRecap() {
             gradePage = 1;
             assignFailedByNim = {};
             currentImportId = Number(res?.meta?.import_id || 0) || null;
+            currentRecapSummary = res.summary || null;
             showUploadDetailContent();
             const subjectName = res?.meta?.subject?.name || subject?.name || '-';
             const resolvedExamType = res?.meta?.exam_type || examType || '-';
@@ -220,8 +265,9 @@ function uploadGradeRecap() {
             const uploadedCount = Number(res?.meta?.uploaded_file_count || files.length || 1);
             const primaryFileName = res?.meta?.file_name || (files[0]?.name || 'nilai.xlsx');
             const summaryFileText = uploadedCount > 1 ? `${uploadedCount} file (${primaryFileName} + lainnya)` : primaryFileName;
-            document.getElementById('summaryInfo').textContent = `${summaryFileText} - ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) - Sheet ${res.meta.sheet_name} (valid: ${res.summary.total_rows || 0}, unik NIM: ${res.summary.unique_nim_rows || 0})`;
-            document.getElementById('detectedInfo').textContent = `Kolom tetap digunakan untuk sheet ${res.meta.sheet_name}. Upload terbaru akan menjadi recap aktif untuk ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) pada kelas yang sama.`;
+            const inactiveCount = Number(res?.summary?.inactive_students || 0);
+            document.getElementById('summaryInfo').textContent = `${summaryFileText} - ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) - Sheet ${res.meta.sheet_name} (ikut rekap: ${res.summary.total_rows || 0}, unik NIM: ${res.summary.unique_nim_rows || 0}, nonaktif: ${inactiveCount})`;
+            document.getElementById('detectedInfo').textContent = `Kolom tetap digunakan untuk sheet ${res.meta.sheet_name}. Upload terbaru akan menjadi recap aktif untuk ${subjectName} (${resolvedExamType}, ${resolvedTerm}, ${resolvedAcademicYear}) pada kelas yang sama. Mahasiswa status cuti/keluar tidak ikut rekap sampai diaktifkan kembali di Master Data.`;
             document.getElementById('totalRows').textContent = String(res.summary.total_rows || 0);
             document.getElementById('avgNormal').textContent = formatNumber(res.summary.avg_normal);
             document.getElementById('avgRemedial').textContent = formatNumber(res.summary.avg_remedial);
@@ -229,13 +275,20 @@ function uploadGradeRecap() {
             document.getElementById('avgFinal').textContent = formatNumber(res.summary.avg_final);
             document.getElementById('matchedStudents').textContent = String(res.summary.matched_students || 0);
             document.getElementById('unmatchedStudents').textContent = String(res.summary.unmatched_students || 0);
+            document.getElementById('inactiveStudents').textContent = String(inactiveCount);
             document.getElementById('duplicateRows').textContent = String(res.summary.duplicate_nim_rows || 0);
             renderFixedColumns(res.meta.fixed_columns || {});
             renderDistribution(res.summary.class_distribution || []);
+            renderInactiveStudentsModal(getInactiveRows());
             renderPagedTable();
             refreshMasterStats();
             updateOpenDetailButtonState();
             loadStoredClassRecaps(false);
+            if (inactiveCount > 0) {
+                openInactiveStudentsModal();
+            } else {
+                closeInactiveStudentsModal();
+            }
             showToast(res.message);
         })
         .catch(error => showToast(error.message, 'error'));

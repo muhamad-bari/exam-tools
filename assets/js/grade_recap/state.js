@@ -4,6 +4,7 @@ let gradePage = 1;
 let assignSelectedNims = new Set();
 let assignFailedByNim = {};
 let currentImportId = null;
+let currentRecapSummary = null;
 let selectedSubject = null;
 let availableSubjects = [];
 let availableSubjectsById = new Map();
@@ -350,7 +351,15 @@ function updateUploadButtonState() {
 }
 
 function getUnmatchedRows() {
-    return allGradeRows.filter(item => !item.matched_master);
+    return allGradeRows.filter(item => String(item.master_match_type || '') === 'not_found');
+}
+
+function getInactiveRows() {
+    return allGradeRows.filter(item => String(item.master_match_type || '') === 'inactive');
+}
+
+function getParticipatingRows() {
+    return allGradeRows.filter(item => !item.recap_blocked);
 }
 
 function updateAssignButtonState() {
@@ -358,23 +367,33 @@ function updateAssignButtonState() {
     const unmatchedCount = getUnmatchedRows().length;
     button.disabled = unmatchedCount <= 0;
     button.innerHTML = `<i class="fa-solid fa-user-plus"></i> Masukkan ke Kelas (${unmatchedCount})`;
+
+    const inactiveButton = document.getElementById('inactiveStudentsBtn');
+    if (inactiveButton) {
+        const inactiveCount = getInactiveRows().length;
+        inactiveButton.style.display = inactiveCount > 0 ? 'inline-flex' : 'none';
+        inactiveButton.innerHTML = `<i class="fa-solid fa-circle-info"></i> Siswa Nonaktif (${inactiveCount})`;
+    }
 }
 
 function refreshMasterStats() {
-    const matched = allGradeRows.filter(item => !!item.matched_master).length;
-    const unmatched = Math.max(0, allGradeRows.length - matched);
+    const matched = allGradeRows.filter(item => String(item.master_match_type || '') === 'active').length;
+    const unmatched = getUnmatchedRows().length;
+    const inactive = getInactiveRows().length;
     document.getElementById('matchedStudents').textContent = String(matched);
     document.getElementById('unmatchedStudents').textContent = String(unmatched);
+    document.getElementById('inactiveStudents').textContent = String(inactive);
     updateAssignButtonState();
 }
 
 function buildDistributionFromRows() {
-    if (!allGradeRows.length) {
+    const participatingRows = getParticipatingRows();
+    if (!participatingRows.length) {
         return [];
     }
 
     const map = new Map();
-    allGradeRows.forEach(item => {
+    participatingRows.forEach(item => {
         const name = (item.kelas || item.master_class || 'Tanpa kelas').trim() || 'Tanpa kelas';
         map.set(name, (map.get(name) || 0) + 1);
     });
@@ -393,6 +412,19 @@ function showDefaultContent() {
 function showUploadDetailContent() {
     document.getElementById('defaultContent').classList.remove('active');
     document.getElementById('uploadDetailContent').classList.add('active');
+}
+
+function closeInactiveStudentsModal() {
+    const modal = document.getElementById('inactiveStudentsModal');
+    if (modal) {
+        modal.classList.remove('open');
+    }
+}
+
+function handleInactiveStudentsModalBackdrop(event) {
+    if (event.target && event.target.id === 'inactiveStudentsModal') {
+        closeInactiveStudentsModal();
+    }
 }
 
 function updateOpenDetailButtonState() {

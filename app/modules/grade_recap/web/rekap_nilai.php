@@ -49,6 +49,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 4px 9px; font-size: 0.76rem; font-weight: 700; }
         .badge.success { background: #dcfce7; color: #166534; }
         .badge.warn { background: #fee2e2; color: #991b1b; }
+        .badge.info { background: #fff7ed; color: #9a3412; }
         .result-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
         .result-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .content-section { display: none; }

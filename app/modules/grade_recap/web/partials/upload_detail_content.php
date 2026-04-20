@@ -6,19 +6,23 @@
         </div>
         <div class="result-actions">
             <button type="button" class="btn gray" onclick="showDefaultContent()"><i class="fa-solid fa-list"></i> Daftar Kelas</button>
+            <button type="button" class="btn gray" id="inactiveStudentsBtn" onclick="openInactiveStudentsModal()" style="display:none;">
+                <i class="fa-solid fa-circle-info"></i> Siswa Nonaktif
+            </button>
             <button type="button" class="btn primary" id="assignClassBtn" onclick="openAssignClassModal()" disabled>
                 <i class="fa-solid fa-user-plus"></i> Masukkan ke Kelas
             </button>
         </div>
     </div>
     <div class="stats">
-        <div class="stat"><strong id="totalRows">0</strong><span class="muted">Total baris valid</span></div>
+        <div class="stat"><strong id="totalRows">0</strong><span class="muted">Total ikut rekap</span></div>
         <div class="stat"><strong id="avgNormal">-</strong><span class="muted">Rata-rata normal</span></div>
         <div class="stat"><strong id="avgRemedial">-</strong><span class="muted">Rata-rata SP</span></div>
         <div class="stat"><strong id="avgSusulan">-</strong><span class="muted">Rata-rata susulan</span></div>
         <div class="stat"><strong id="avgFinal">-</strong><span class="muted">Rata-rata akhir</span></div>
         <div class="stat"><strong id="matchedStudents">0</strong><span class="muted">Cocok dengan master</span></div>
         <div class="stat"><strong id="unmatchedStudents">0</strong><span class="muted">Belum ada di master</span></div>
+        <div class="stat"><strong id="inactiveStudents">0</strong><span class="muted">Nonaktif di master</span></div>
         <div class="stat"><strong id="duplicateRows">0</strong><span class="muted">Baris NIM duplikat</span></div>
     </div>
     <div class="table-wrap">
