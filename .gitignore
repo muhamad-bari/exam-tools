@@ -5,3 +5,5 @@ vendor/
 .cocoindex_code/
 .DS_Store
 *.log
+# CocoIndex Code (ccc)
+/.cocoindex_code/

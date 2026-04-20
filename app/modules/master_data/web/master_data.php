@@ -56,12 +56,18 @@ require_once __DIR__ . '/../../../bootstrap.php';
         .status-tidak_naik { background: #fef3c7; color: #92400e; }
         .status-cuti { background: #e0f2fe; color: #075985; }
         .status-keluar { background: #fee2e2; color: #991b1b; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .field-group { display: grid; gap: 6px; }
+        .field-group label { color: #334155; font-size: 0.88rem; font-weight: 700; }
+        .field-group input, .field-group select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+        .field-span-full { grid-column: 1 / -1; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
         #toast-container { position: fixed; top: 78px; right: 20px; z-index: 9999; display: grid; gap: 8px; }
         .toast { min-width: 240px; padding: 10px 14px; border-radius: 10px; color: #fff; background: #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.16); opacity: 0; transform: translateY(-10px); transition: all .25s ease; }
         .toast.show { opacity: 1; transform: translateY(0); }
         .toast.success { background: #16a34a; }
         .toast.error { background: #dc2626; }
-        @media (max-width: 960px) { .grid, .stats { grid-template-columns: 1fr; } }
+        @media (max-width: 960px) { .grid, .stats, .form-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -221,6 +227,48 @@ require_once __DIR__ . '/../../../bootstrap.php';
             </div>
         </div>
     </div>
+    <div id="editStudentModal" class="modal-backdrop" onclick="handleEditStudentBackdrop(event)">
+        <div class="modal-card" style="width:min(720px, 100%);">
+            <div class="modal-header">
+                <div>
+                    <h2 id="editStudentModalTitle" style="margin:0 0 6px;">Edit Mahasiswa</h2>
+                    <p id="editStudentModalInfo" class="muted" style="margin:0;">Perbarui data mahasiswa dalam satu form.</p>
+                </div>
+                <button type="button" class="modal-close" onclick="closeEditStudentModal()" title="Tutup">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form class="modal-body" onsubmit="submitEditStudent(event)">
+                <div class="form-grid">
+                    <div class="field-group field-span-full">
+                        <label for="editStudentName">Nama Mahasiswa</label>
+                        <input type="text" id="editStudentName" placeholder="Masukkan nama mahasiswa">
+                    </div>
+                    <div class="field-group">
+                        <label for="editStudentNim">NIM</label>
+                        <input type="text" id="editStudentNim" placeholder="Masukkan NIM mahasiswa">
+                    </div>
+                    <div class="field-group">
+                        <label for="editStudentClass">Kelas</label>
+                        <select id="editStudentClass"></select>
+                    </div>
+                    <div class="field-group">
+                        <label for="editStudentStatus">Status</label>
+                        <select id="editStudentStatus">
+                            <option value="aktif">Aktif</option>
+                            <option value="tidak_naik">Tidak Naik</option>
+                            <option value="cuti">Cuti</option>
+                            <option value="keluar">Keluar</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn gray" style="flex:0 0 auto;" onclick="closeEditStudentModal()"><i class="fa-solid fa-xmark"></i> Batal</button>
+                    <button type="submit" id="editStudentSubmitBtn" class="btn primary" style="flex:0 0 auto;"><i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="assets/js/shared/utils.js"></script>
     <script>
         const pageSize = 5;
@@ -234,6 +282,8 @@ require_once __DIR__ . '/../../../bootstrap.php';
         let currentStudentModalRows = [];
         let currentStudentModalPage = 1;
         let currentStudentModalSearchTerm = '';
+        let currentEditingStudentId = null;
+        let currentStudentFormMode = 'edit';
 
         function escapeHtml(value) {
             return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -492,11 +542,39 @@ require_once __DIR__ . '/../../../bootstrap.php';
 
         function closeClassStudentsModal() {
             document.getElementById('classStudentsModal').classList.remove('show');
+            closeEditStudentModal();
             currentStudentModalClassId = null;
             currentStudentModalRows = [];
             currentStudentModalPage = 1;
             currentStudentModalSearchTerm = '';
             document.getElementById('classStudentsSearch').value = '';
+        }
+
+        function handleEditStudentBackdrop(event) {
+            if (event.target && event.target.id === 'editStudentModal') {
+                closeEditStudentModal();
+            }
+        }
+
+        function closeEditStudentModal() {
+            document.getElementById('editStudentModal').classList.remove('show');
+            currentEditingStudentId = null;
+            currentStudentFormMode = 'edit';
+            document.getElementById('editStudentName').value = '';
+            document.getElementById('editStudentNim').value = '';
+            document.getElementById('editStudentClass').innerHTML = '';
+            document.getElementById('editStudentStatus').value = 'aktif';
+            document.getElementById('editStudentModalTitle').textContent = 'Edit Mahasiswa';
+            document.getElementById('editStudentModalInfo').textContent = 'Perbarui data mahasiswa dalam satu form.';
+            document.getElementById('editStudentSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan';
+        }
+
+        function renderEditStudentClassOptions(selectedClassId) {
+            const select = document.getElementById('editStudentClass');
+            select.innerHTML = allClassRows.map(item => {
+                const selected = String(item.id) === String(selectedClassId) ? ' selected' : '';
+                return `<option value="${escapeHtml(item.id)}"${selected}>${escapeHtml(item.name)}</option>`;
+            }).join('');
         }
 
         function getCurrentStudentModalRows() {
@@ -620,65 +698,16 @@ require_once __DIR__ . '/../../../bootstrap.php';
             }
 
             const classRow = getClassRowById(currentStudentModalClassId);
-            const name = prompt(`Nama mahasiswa baru untuk kelas ${classRow ? classRow.name : ''}:`, '');
-            if (name === null) {
-                return;
-            }
-
-            const normalizedName = name.trim();
-            if (!normalizedName) {
-                showToast('Nama mahasiswa wajib diisi', 'error');
-                return;
-            }
-
-            const nim = prompt('NIM mahasiswa baru:', '');
-            if (nim === null) {
-                return;
-            }
-
-            const normalizedNim = nim.trim();
-            if (!normalizedNim) {
-                showToast('NIM mahasiswa wajib diisi', 'error');
-                return;
-            }
-
-            const statusInput = prompt('Status mahasiswa: aktif, cuti, tidak_naik, keluar', 'aktif');
-            if (statusInput === null) {
-                return;
-            }
-
-            const normalizedStatus = normalizeStudentStatusInput(statusInput);
-            if (!normalizedStatus) {
-                showToast('Status mahasiswa tidak valid', 'error');
-                return;
-            }
-
-            fetch('index.php?api=master_data&action=create_student', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    class_id: currentStudentModalClassId,
-                    name: normalizedName,
-                    nim: normalizedNim,
-                    student_status: normalizedStatus
-                })
-            })
-                .then(r => r.json())
-                .then(res => {
-                    if (!res.success) {
-                        throw new Error(res.message || 'Tambah mahasiswa gagal');
-                    }
-
-                    return Promise.all([
-                        loadOverview(true),
-                        reloadClassStudentsModal()
-                    ]).then(() => showToast(`Mahasiswa ditambahkan: ${res.data.nama}`));
-                })
-                .catch(error => showToast(error.message, 'error'));
-        }
-
-        function buildClassListPrompt() {
-            return allClassRows.map(item => `${item.id}: ${item.name}`).join('\n');
+            currentEditingStudentId = null;
+            currentStudentFormMode = 'create';
+            document.getElementById('editStudentName').value = '';
+            document.getElementById('editStudentNim').value = '';
+            renderEditStudentClassOptions(currentStudentModalClassId);
+            document.getElementById('editStudentStatus').value = 'aktif';
+            document.getElementById('editStudentModalTitle').textContent = 'Tambah Mahasiswa';
+            document.getElementById('editStudentModalInfo').textContent = `Tambahkan mahasiswa baru ke ${classRow ? classRow.name : 'kelas ini'} dalam satu form.`;
+            document.getElementById('editStudentSubmitBtn').innerHTML = '<i class="fa-solid fa-user-plus"></i> Tambah Mahasiswa';
+            document.getElementById('editStudentModal').classList.add('show');
         }
 
         function editStudent(studentId) {
@@ -688,47 +717,81 @@ require_once __DIR__ . '/../../../bootstrap.php';
                 return;
             }
 
-            const nextName = prompt('Nama mahasiswa:', student.nama || '');
-            if (nextName === null) {
-                return;
-            }
+            currentEditingStudentId = student.id;
+            currentStudentFormMode = 'edit';
+            document.getElementById('editStudentName').value = student.nama || '';
+            document.getElementById('editStudentNim').value = student.nim || '';
+            renderEditStudentClassOptions(student.class_id || '');
+            document.getElementById('editStudentStatus').value = normalizeStudentStatusInput(student.student_status) || 'aktif';
+            document.getElementById('editStudentModalTitle').textContent = 'Edit Mahasiswa';
+            document.getElementById('editStudentModalInfo').textContent = `Edit data ${student.nama || 'mahasiswa'} dan simpan sekali jalan.`;
+            document.getElementById('editStudentSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan';
+            document.getElementById('editStudentModal').classList.add('show');
+        }
 
-            const normalizedName = nextName.trim();
+        function submitEditStudent(event) {
+            event.preventDefault();
+
+            const normalizedName = document.getElementById('editStudentName').value.trim();
+            const normalizedNim = document.getElementById('editStudentNim').value.trim();
+            const normalizedClassId = Number(document.getElementById('editStudentClass').value || 0);
+            const normalizedStatus = normalizeStudentStatusInput(document.getElementById('editStudentStatus').value);
+
             if (!normalizedName) {
                 showToast('Nama mahasiswa wajib diisi', 'error');
                 return;
             }
 
-            const nextNim = prompt('NIM mahasiswa:', student.nim || '');
-            if (nextNim === null) {
-                return;
-            }
-
-            const normalizedNim = nextNim.trim();
             if (!normalizedNim) {
                 showToast('NIM mahasiswa wajib diisi', 'error');
                 return;
             }
 
-            const classInput = prompt(`Pindah ke ID kelas berikut:\n${buildClassListPrompt()}`, String(student.class_id || ''));
-            if (classInput === null) {
-                return;
-            }
-
-            const normalizedClassId = Number(String(classInput).trim());
             if (!normalizedClassId || !getClassRowById(normalizedClassId)) {
-                showToast('ID kelas tujuan tidak valid', 'error');
+                showToast('Kelas tujuan tidak valid', 'error');
                 return;
             }
 
-            const statusInput = prompt('Status mahasiswa: aktif, cuti, tidak_naik, keluar', student.student_status || 'aktif');
-            if (statusInput === null) {
-                return;
-            }
-
-            const normalizedStatus = normalizeStudentStatusInput(statusInput);
             if (!normalizedStatus) {
                 showToast('Status mahasiswa tidak valid', 'error');
+                return;
+            }
+
+            if (currentStudentFormMode === 'create') {
+                fetch('index.php?api=master_data&action=create_student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        class_id: normalizedClassId,
+                        name: normalizedName,
+                        nim: normalizedNim,
+                        student_status: normalizedStatus
+                    })
+                })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (!res.success) {
+                            throw new Error(res.message || 'Tambah mahasiswa gagal');
+                        }
+
+                        closeEditStudentModal();
+                        return Promise.all([
+                            loadOverview(true),
+                            reloadClassStudentsModal()
+                        ]).then(() => showToast(`Mahasiswa ditambahkan: ${res.data.nama}`));
+                    })
+                    .catch(error => showToast(error.message, 'error'));
+                return;
+            }
+
+            if (!currentEditingStudentId) {
+                showToast('Data mahasiswa tidak ditemukan', 'error');
+                return;
+            }
+
+            const student = getStudentRowById(currentEditingStudentId);
+            if (!student) {
+                showToast('Data mahasiswa tidak ditemukan', 'error');
                 return;
             }
 
@@ -736,7 +799,7 @@ require_once __DIR__ . '/../../../bootstrap.php';
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    student_id: studentId,
+                    student_id: currentEditingStudentId,
                     class_id: normalizedClassId,
                     name: normalizedName,
                     nim: normalizedNim,
@@ -750,13 +813,15 @@ require_once __DIR__ . '/../../../bootstrap.php';
                     }
 
                     return loadOverview(true).then(() => {
-                        if (String(normalizedClassId) !== String(currentStudentModalClassId)) {
-                            closeClassStudentsModal();
-                            showToast(`Mahasiswa dipindahkan ke ${res.data.class_name}`);
-                            return;
-                        }
+                        closeEditStudentModal();
+                        return reloadClassStudentsModal().then(() => {
+                            if (String(normalizedClassId) !== String(student.class_id)) {
+                                showToast(`Mahasiswa dipindahkan ke ${res.data.class_name}`);
+                                return;
+                            }
 
-                        return reloadClassStudentsModal().then(() => showToast(`Mahasiswa diperbarui: ${res.data.nama}`));
+                            showToast(`Mahasiswa diperbarui: ${res.data.nama}`);
+                        });
                     });
                 })
                 .catch(error => showToast(error.message, 'error'));
