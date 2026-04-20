@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request();
 require_once PROJECT_ROOT . '/vendor/autoload.php';
 require_once PROJECT_ROOT . '/phpqrcode/qrlib.php';
 require_once PROJECT_ROOT . '/app/shared/lib/pdf_helper.php';

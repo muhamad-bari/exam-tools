@@ -6,6 +6,7 @@
 
 // Prevent any output before sending headers
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request(true);
 
 ob_start();
 
@@ -16,8 +17,6 @@ ini_set('log_errors', 1);
 
 // Set JSON header FIRST before anything else
 header('Content-Type: application/json; charset=utf-8');
-
-session_start();
 
 ini_set('memory_limit', '512M');
 set_time_limit(300);

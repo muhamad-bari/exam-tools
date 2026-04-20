@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request(true);
 /**
  * Debug Script untuk test API response
- * Buka di browser: http://localhost/exam-tools/test_api.php
+ * Buka via router: index.php?api=diagnostics
  */
 
 echo "<h1>Testing API Generate Jadwal</h1>";
@@ -11,8 +13,9 @@ $files_to_check = [
     'vendor/autoload.php' => 'Composer Autoload',
     'phpqrcode/qrlib.php' => 'QR Code Library',
     'format/format_mahasiswa.csv' => 'Sample CSV Format',
-    'generate_pdf_api.php' => 'PDF API Handler',
-    'api_generate_jadwal.php' => 'Old API Handler (deprecated)'
+    'index.php' => 'Single Entry Router',
+    'app/modules/schedule/api/generate_pdf_api.php' => 'PDF API Handler',
+    'app/modules/schedule/api/api_generate_jadwal.php' => 'Schedule API Handler'
 ];
 
 echo "<h2>File Dependencies:</h2>";
@@ -46,6 +49,6 @@ echo "</ul>";
 
 // Test minimal request
 echo "<h2>API Test:</h2>";
-echo "<p>Buka <strong>jadwal.php</strong> dan isi form dengan data, lalu cek response di browser console (F12).</p>";
-echo "<p>Jika masih error, buka tab <strong>Network</strong> di DevTools dan lihat response raw dari api_generate_jadwal.php</p>";
+echo "<p>Buka <strong>index.php?route=schedule</strong> dan isi form dengan data, lalu cek response di browser console (F12).</p>";
+echo "<p>Jika masih error, buka tab <strong>Network</strong> di DevTools dan lihat response raw dari <strong>index.php?api=generate_jadwal</strong>.</p>";
 ?>

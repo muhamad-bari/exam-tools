@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request(true);
 
 header('Content-Type: application/json; charset=utf-8');
 http_response_code(200);
@@ -17,8 +18,6 @@ use Dompdf\Options;
 require_once PROJECT_ROOT . '/app/shared/lib/database.php';
 
 try {
-    session_start();
-
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         throw new RuntimeException('Invalid request method: ' . ($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN'));
     }

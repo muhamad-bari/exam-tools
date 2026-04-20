@@ -1,7 +1,69 @@
 <?php
 require_once __DIR__ . '/app/bootstrap.php';
+require_once APP_ROOT . '/shared/lib/auth.php';
+
+function isHttpsRequest(): bool
+{
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        return true;
+    }
+
+    if (isset($_SERVER['SERVER_PORT']) && (string) $_SERVER['SERVER_PORT'] === '443') {
+        return true;
+    }
+
+    return isset($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https';
+}
+
+function getSessionCookiePath(): string
+{
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
+    $directory = str_replace('\\', '/', dirname($scriptName));
+
+    if ($directory === '/' || $directory === '.') {
+        return '/';
+    }
+
+    return rtrim($directory, '/');
+}
+
+function redirectToRoute(string $route): void
+{
+    header('Location: index.php?route=' . rawurlencode($route));
+    exit;
+}
+
+function sendJsonResponse(int $statusCode, array $payload): void
+{
+    http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit;
+}
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_strict_mode', '1');
+
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => getSessionCookiePath(),
+        'secure' => isHttpsRequest(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+
+    session_start();
+}
+
+if (!defined('APP_ROUTER_REQUEST')) {
+    define('APP_ROUTER_REQUEST', true);
+}
 
 $webRoutes = [
+    'login' => APP_ROOT . '/modules/auth/web/login.php',
+    'dashboard' => APP_ROOT . '/modules/dashboard/web/index.php',
     'qr' => APP_ROOT . '/modules/qr/web/index.php',
     'master-data' => APP_ROOT . '/modules/master_data/web/master_data.php',
     'schedule' => APP_ROOT . '/modules/schedule/web/jadwal.php',
@@ -22,24 +84,67 @@ $apiRoutes = [
     'legacy_dompdf' => APP_ROOT . '/modules/qr/legacy/dompdf.php',
 ];
 
+$publicWebRoutes = ['login'];
+
+$requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
 $api = $_GET['api'] ?? '';
 if ($api !== '') {
     if (!isset($apiRoutes[$api])) {
-        http_response_code(404);
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'message' => 'API route not found']);
-        exit;
+        sendJsonResponse(404, ['success' => false, 'message' => 'API route not found']);
+    }
+
+    if (!auth_is_authenticated()) {
+        sendJsonResponse(401, ['success' => false, 'message' => 'Unauthorized']);
     }
 
     require $apiRoutes[$api];
     exit;
 }
 
-$route = $_GET['route'] ?? 'qr';
+$route = isset($_GET['route']) ? trim((string) $_GET['route']) : '';
+if ($route === '') {
+    $route = auth_is_authenticated() ? 'dashboard' : 'login';
+}
+
+if ($route === 'logout') {
+    if ($requestMethod !== 'POST') {
+        http_response_code(405);
+        header('Allow: POST');
+        echo 'Method Not Allowed';
+        exit;
+    }
+
+    auth_logout_user();
+    redirectToRoute('login');
+}
+
+if ($route === 'login') {
+    if (auth_is_authenticated()) {
+        redirectToRoute('dashboard');
+    }
+
+    if ($requestMethod === 'POST') {
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $password = (string) ($_POST['password'] ?? '');
+
+        if (auth_attempt_login($username, $password)) {
+            redirectToRoute('dashboard');
+        }
+
+        auth_set_flash_message('login_error', 'Invalid username or password.');
+        redirectToRoute('login');
+    }
+}
+
 if (!isset($webRoutes[$route])) {
     http_response_code(404);
     echo 'Page not found';
     exit;
+}
+
+if (!in_array($route, $publicWebRoutes, true) && !auth_is_authenticated()) {
+    redirectToRoute('login');
 }
 
 require $webRoutes[$route];

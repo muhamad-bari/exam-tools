@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request();
 ini_set('memory_limit', '512M');
 set_time_limit(300);
 ?>

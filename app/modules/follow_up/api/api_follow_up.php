@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request(true);
 
 header('Content-Type: application/json; charset=utf-8');
 

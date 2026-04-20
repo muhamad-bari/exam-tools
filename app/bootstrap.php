@@ -58,3 +58,26 @@ if (!function_exists('ctype_upper')) {
         return $text !== '' && preg_match('/^[A-Z]+$/', $text) === 1;
     }
 }
+
+if (!function_exists('app_require_router_request')) {
+    function app_require_router_request(bool $expectsJson = false): void
+    {
+        if (defined('APP_ROUTER_REQUEST') && APP_ROUTER_REQUEST === true) {
+            return;
+        }
+
+        http_response_code(404);
+
+        if ($expectsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'API route not found',
+            ]);
+            exit;
+        }
+
+        echo 'Page not found';
+        exit;
+    }
+}

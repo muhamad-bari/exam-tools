@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once __DIR__ . '/../../../bootstrap.php';
+app_require_router_request();
 ?>
 <!DOCTYPE html>
 <html lang="id">
