@@ -64,6 +64,7 @@ if (!defined('APP_ROUTER_REQUEST')) {
 $webRoutes = [
     'login' => APP_ROOT . '/modules/auth/web/login.php',
     'dashboard' => APP_ROOT . '/modules/dashboard/web/index.php',
+    'backup-database' => APP_ROOT . '/modules/backup/web/download.php',
     'qr' => APP_ROOT . '/modules/qr/web/index.php',
     'master-data' => APP_ROOT . '/modules/master_data/web/master_data.php',
     'schedule' => APP_ROOT . '/modules/schedule/web/jadwal.php',
@@ -72,6 +73,7 @@ $webRoutes = [
 ];
 
 $apiRoutes = [
+    'db_backup' => APP_ROOT . '/modules/backup/api/api_db_backup.php',
     'download' => APP_ROOT . '/modules/qr/api/download.php',
     'generate_pdf' => APP_ROOT . '/modules/schedule/api/generate_pdf_api.php',
     'generate_jadwal' => APP_ROOT . '/modules/schedule/api/api_generate_jadwal.php',

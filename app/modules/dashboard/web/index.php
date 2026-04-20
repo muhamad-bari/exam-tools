@@ -159,6 +159,12 @@ $quickActions = [
         'description' => 'Lihat impor terkini dan kecocokan mahasiswa.',
     ],
     [
+        'href' => 'index.php?route=backup-database',
+        'icon' => 'fa-solid fa-hard-drive',
+        'label' => 'Unduh backup database',
+        'description' => 'Ambil salinan penuh SQLite untuk backup operasional.',
+    ],
+    [
         'href' => 'index.php?route=follow-up',
         'icon' => 'fa-solid fa-clipboard-check',
         'label' => 'Kelola remedial & susulan',
