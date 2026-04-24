@@ -176,6 +176,21 @@ try {
         exit;
     }
 
+    if ($action === 'duplicate_folder') {
+        ensurePostRequest();
+        $input = readJsonInput();
+        $id = intval($input['id'] ?? 0);
+        $name = trim((string) ($input['name'] ?? ''));
+        if ($id <= 0 || $name === '') {
+            throw new RuntimeException('Data duplikasi folder tidak valid');
+        }
+
+        $newFolderId = duplicateFolderTree($db, $id, $name);
+
+        echo json_encode(['success' => true, 'id' => $newFolderId, 'message' => 'Folder berhasil diduplikasi']);
+        exit;
+    }
+
     if ($action === 'rename_folder') {
         ensurePostRequest();
         $input = readJsonInput();
@@ -316,4 +331,79 @@ function readJsonInput()
 {
     $input = json_decode(file_get_contents('php://input'), true);
     return is_array($input) ? $input : [];
+}
+
+function duplicateFolderTree(PDO $db, $sourceFolderId, $newRootName)
+{
+    $sourceFolderId = (int) $sourceFolderId;
+    $newRootName = trim((string) $newRootName);
+
+    $stmt = $db->prepare('SELECT id, name, parent_id FROM folders WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $sourceFolderId]);
+    $folder = $stmt->fetch();
+
+    if (!$folder) {
+        throw new RuntimeException('Folder sumber tidak ditemukan');
+    }
+
+    $db->beginTransaction();
+    try {
+        $newFolderId = duplicateFolderNode($db, $sourceFolderId, normalizeRootId($folder['parent_id'] ?? null), $newRootName);
+        $db->commit();
+        return $newFolderId;
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function duplicateFolderNode(PDO $db, $sourceFolderId, $targetParentId, $folderNameOverride = null)
+{
+    $sourceFolderId = (int) $sourceFolderId;
+    $targetParentId = normalizeRootId($targetParentId);
+
+    $folderStmt = $db->prepare('SELECT id, name FROM folders WHERE id = :id LIMIT 1');
+    $folderStmt->execute([':id' => $sourceFolderId]);
+    $folder = $folderStmt->fetch();
+
+    if (!$folder) {
+        throw new RuntimeException('Folder sumber tidak ditemukan');
+    }
+
+    $insertFolder = $db->prepare('INSERT INTO folders (name, parent_id) VALUES (:name, :parent_id)');
+    $insertFolder->bindValue(':name', $folderNameOverride !== null ? trim((string) $folderNameOverride) : $folder['name'], PDO::PARAM_STR);
+    if ($targetParentId === null) {
+        $insertFolder->bindValue(':parent_id', null, PDO::PARAM_NULL);
+    } else {
+        $insertFolder->bindValue(':parent_id', $targetParentId, PDO::PARAM_INT);
+    }
+    $insertFolder->execute();
+
+    $newFolderId = (int) $db->lastInsertId();
+
+    $sessionStmt = $db->prepare('SELECT name, data FROM sessions WHERE folder_id = :folder_id ORDER BY created_at ASC, id ASC');
+    $sessionStmt->execute([':folder_id' => $sourceFolderId]);
+    $sessions = $sessionStmt->fetchAll();
+
+    if ($sessions) {
+        $insertSession = $db->prepare('INSERT INTO sessions (name, data, folder_id) VALUES (:name, :data, :folder_id)');
+        foreach ($sessions as $session) {
+            $insertSession->bindValue(':name', $session['name'], PDO::PARAM_STR);
+            $insertSession->bindValue(':data', $session['data'], PDO::PARAM_STR);
+            $insertSession->bindValue(':folder_id', $newFolderId, PDO::PARAM_INT);
+            $insertSession->execute();
+        }
+    }
+
+    $childStmt = $db->prepare('SELECT id FROM folders WHERE parent_id = :parent_id ORDER BY created_at ASC, id ASC');
+    $childStmt->execute([':parent_id' => $sourceFolderId]);
+    $children = $childStmt->fetchAll();
+
+    foreach ($children as $child) {
+        duplicateFolderNode($db, (int) $child['id'], $newFolderId);
+    }
+
+    return $newFolderId;
 }
