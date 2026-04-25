@@ -19,6 +19,8 @@
             signer_date: document.getElementsByName('signer_date')[0].value,
             logo_data: document.getElementById('existing_logo_data').value,
             class_id: document.getElementById('classSelect').value || '',
+            selected_student_id: document.getElementById('selectedStudentId').value || '',
+            selected_student_label: document.getElementById('studentSearchInput').value.trim(),
             schedule: []
         };
 
@@ -60,8 +62,16 @@
     };
 
     window.restoreForm = function (data, sessionName = '', folderId = null) {
+        if ((data.class_id || data.selected_student_id) && (!Array.isArray(state.masterClasses) || !state.masterClasses.length)) {
+            loadMasterData(true)
+                .then(() => restoreForm(data, sessionName, folderId))
+                .catch((error) => showToast(error.message || 'Gagal memuat master data', 'error'));
+            return;
+        }
+
         document.getElementById('sessionNameInput').value = sessionName || '';
         document.getElementById('saveFolderSelect').value = folderId || '';
+        deleteCsvFile();
         document.getElementsByName('header_line1')[0].value = data.header_line1 || defaults.defaultHeaderLine1 || 'AKADEMI KEBIDANAN WIJAYA HUSADA';
         document.getElementsByName('header_line2')[0].value = data.header_line2 || '';
         document.getElementsByName('sub_title')[0].value = data.sub_title || defaults.defaultSubTitle || '';
@@ -83,6 +93,8 @@
 
         populateClassSelect(data.class_id || '');
         document.getElementById('classSelect').value = data.class_id || '';
+        state.pendingSelectedPreviewStudentId = data.selected_student_id || '';
+        state.pendingSelectedPreviewStudentLabel = data.selected_student_label || '';
         const tbody = document.getElementById('scheduleBody');
         tbody.innerHTML = '';
         if (Array.isArray(data.schedule) && data.schedule.length) {
@@ -90,7 +102,7 @@
         } else {
             addRow();
         }
-        handleClassChange();
+        handleClassChange(!!data.selected_student_id);
         updatePreview();
     };
 

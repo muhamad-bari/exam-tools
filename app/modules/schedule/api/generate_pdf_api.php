@@ -108,6 +108,13 @@ try {
         throw new RuntimeException('Tidak ada jadwal yang valid untuk dibuatkan PDF');
     }
 
+    $selectedStudentIdRaw = trim((string) ($_POST['selected_student_id'] ?? $_POST['selected_student'] ?? ''));
+    $selectedStudentId = $selectedStudentIdRaw !== '' ? intval($selectedStudentIdRaw) : 0;
+
+    if ($selectedStudentIdRaw !== '' && $selectedStudentId <= 0) {
+        throw new RuntimeException('Mahasiswa yang dipilih tidak valid');
+    }
+
     $classId = intval($_POST['class_id'] ?? 0);
     $students = [];
     $sourceLabel = 'mahasiswa';
@@ -118,8 +125,23 @@ try {
         if (!$students) {
             throw new RuntimeException('Kelas terpilih belum memiliki mahasiswa aktif');
         }
+
+        if ($selectedStudentId > 0) {
+            $students = array_values(array_filter($students, static function ($student) use ($selectedStudentId) {
+                return isset($student['id']) && (int) $student['id'] === $selectedStudentId;
+            }));
+
+            if (!$students) {
+                throw new RuntimeException('Mahasiswa yang dipilih tidak ditemukan pada kelas yang dipilih');
+            }
+        }
+
         $sourceLabel = preg_replace('/[^a-zA-Z0-9_-]/', '_', $result['class']['name']);
     } else {
+        if ($selectedStudentIdRaw !== '') {
+            throw new RuntimeException('Pilihan satu mahasiswa hanya tersedia saat menggunakan kelas master');
+        }
+
         if (!isset($_FILES['student_csv']) || $_FILES['student_csv']['error'] !== 0) {
             throw new RuntimeException('Pilih kelas master atau unggah file CSV mahasiswa');
         }
@@ -240,6 +262,8 @@ try {
     echo json_encode([
         'success' => false,
         'message' => $e->getMessage(),
+        'pdf_data' => null,
+        'filename' => '',
     ]);
     exit;
 }

@@ -2,12 +2,21 @@
     window.generatePDF = function () {
         const hasClass = !!document.getElementById('classSelect').value;
         const csvInput = document.getElementById('student_csv');
+        const studentSearchInput = document.getElementById('studentSearchInput');
+        const selectedStudentId = document.getElementById('selectedStudentId').value;
         if (!hasClass && (!csvInput.files || csvInput.files.length === 0)) {
             showToast('Pilih kelas master atau upload CSV mahasiswa terlebih dahulu!', 'error');
             return;
         }
 
+        if (hasClass && studentSearchInput && studentSearchInput.value.trim() && !selectedStudentId) {
+            showToast('Pilih mahasiswa dari dropdown hasil pencarian atau kosongkan pencarian untuk generate seluruh kelas.', 'error');
+            studentSearchInput.focus();
+            return;
+        }
+
         const formData = new FormData(document.getElementById('scheduleForm'));
+        formData.set('selected_student_id', selectedStudentId || '');
         const btn = document.getElementById('generatePdfBtn');
         const btnText = document.getElementById('btnText');
         btn.disabled = true;

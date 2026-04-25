@@ -1,6 +1,269 @@
 (function () {
     const state = window.scheduleState;
 
+    state.studentSearchQuery = state.studentSearchQuery || '';
+    state.studentSearchResults = state.studentSearchResults || [];
+    state.selectedPreviewStudentId = state.selectedPreviewStudentId || '';
+    state.currentPreviewClass = state.currentPreviewClass || null;
+    state.pendingSelectedPreviewStudentId = state.pendingSelectedPreviewStudentId || '';
+    state.pendingSelectedPreviewStudentLabel = state.pendingSelectedPreviewStudentLabel || '';
+    state.classRequestToken = state.classRequestToken || 0;
+
+    function getStudentSearchInput() {
+        return document.getElementById('studentSearchInput');
+    }
+
+    function getSelectedStudentField() {
+        return document.getElementById('selectedStudentId');
+    }
+
+    function getStudentSearchDropdown() {
+        return document.getElementById('studentSearchDropdown');
+    }
+
+    function getStudentSearchStatus() {
+        return document.getElementById('studentSearchStatus');
+    }
+
+    function getSelectedPreviewStudent() {
+        const hiddenField = getSelectedStudentField();
+        const studentId = String(state.selectedPreviewStudentId || (hiddenField ? hiddenField.value : '') || '');
+        if (!studentId) {
+            return null;
+        }
+        return state.previewStudents.find((student) => String(student.id) === studentId) || null;
+    }
+
+    function getStudentLabel(student) {
+        return `${student.nama || 'Mahasiswa'} (${student.nim || '-'})`;
+    }
+
+    function getStudentClassLabel(student) {
+        return student.tingkat || (state.currentPreviewClass && state.currentPreviewClass.name) || '-';
+    }
+
+    function hideStudentSearchDropdown() {
+        const dropdown = getStudentSearchDropdown();
+        if (!dropdown) {
+            return;
+        }
+        dropdown.innerHTML = '';
+        dropdown.style.display = 'none';
+    }
+
+    function setStudentSearchStatus(student = null) {
+        const status = getStudentSearchStatus();
+        if (!status) {
+            return;
+        }
+
+        if (student) {
+            status.className = 'student-search-selected is-active';
+            status.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>${escapeHtml(student.nama || 'Mahasiswa')} • ${escapeHtml(student.nim || '-')} • ${escapeHtml(getStudentClassLabel(student))}</span>`;
+            return;
+        }
+
+        status.className = 'student-search-selected';
+        status.innerHTML = 'Kosongkan pencarian untuk tetap generate semua mahasiswa di kelas aktif.';
+    }
+
+    function updateStudentSearchAvailability() {
+        const input = getStudentSearchInput();
+        if (!input) {
+            return;
+        }
+
+        const hasClass = !!document.getElementById('classSelect').value;
+        input.disabled = !hasClass;
+        input.placeholder = hasClass
+            ? 'Ketik minimal 3 huruf nama atau 3 digit NIM...'
+            : 'Pilih kelas master terlebih dahulu';
+    }
+
+    function getStudentSearchThresholdState(rawValue) {
+        const query = String(rawValue || '').trim();
+        const digitCount = query.replace(/\D/g, '').length;
+        const letterCount = query.replace(/[^a-zA-Z]/g, '').length;
+
+        return {
+            query,
+            meetsThreshold: digitCount >= 3 || letterCount >= 3
+        };
+    }
+
+    function filterPreviewStudents(query) {
+        const normalizedQuery = String(query || '').trim().toLowerCase();
+        const digitQuery = normalizedQuery.replace(/\D/g, '');
+
+        return state.previewStudents.filter((student) => {
+            const studentName = String(student.nama || '').toLowerCase();
+            const studentNim = String(student.nim || '');
+            return studentName.includes(normalizedQuery) || (!!digitQuery && studentNim.includes(digitQuery));
+        });
+    }
+
+    function clearSelectedPreviewStudent(keepInputValue = false) {
+        const input = getStudentSearchInput();
+        const hidden = getSelectedStudentField();
+
+        state.selectedPreviewStudentId = '';
+        if (hidden) {
+            hidden.value = '';
+        }
+        if (input) {
+            input.classList.remove('is-selected');
+            if (!keepInputValue) {
+                input.value = '';
+            }
+        }
+        setStudentSearchStatus(null);
+    }
+
+    function setStudentPreviewPageForStudent(studentId) {
+        const selectedIndex = state.previewStudents.findIndex((student) => String(student.id) === String(studentId));
+        if (selectedIndex < 0) {
+            return;
+        }
+
+        state.studentPreviewPage = Math.floor(selectedIndex / state.studentPreviewPageSize) + 1;
+    }
+
+    function applyPendingSelectedPreviewStudent() {
+        const pendingStudentId = String(state.pendingSelectedPreviewStudentId || '');
+        const input = getStudentSearchInput();
+        const hidden = getSelectedStudentField();
+        if (!pendingStudentId || !input || !hidden) {
+            return;
+        }
+
+        const student = state.previewStudents.find((item) => String(item.id) === pendingStudentId);
+        state.pendingSelectedPreviewStudentId = '';
+        if (!student) {
+            state.pendingSelectedPreviewStudentLabel = '';
+            return;
+        }
+
+        state.selectedPreviewStudentId = String(student.id);
+        hidden.value = student.id;
+        input.value = state.pendingSelectedPreviewStudentLabel || getStudentLabel(student);
+        input.classList.add('is-selected');
+        setStudentSearchStatus(student);
+        setStudentPreviewPageForStudent(student.id);
+        state.pendingSelectedPreviewStudentLabel = '';
+    }
+
+    function syncSelectedPreviewStudent() {
+        const selectedStudent = getSelectedPreviewStudent();
+        if (selectedStudent) {
+            state.selectedPreviewStudentId = String(selectedStudent.id);
+            if (getSelectedStudentField()) {
+                getSelectedStudentField().value = selectedStudent.id;
+            }
+            if (getStudentSearchInput()) {
+                getStudentSearchInput().classList.add('is-selected');
+            }
+            setStudentSearchStatus(selectedStudent);
+            return selectedStudent;
+        }
+
+        clearSelectedPreviewStudent(true);
+        return null;
+    }
+
+    function renderStudentSearchDropdown() {
+        const input = getStudentSearchInput();
+        const dropdown = getStudentSearchDropdown();
+        if (!input || !dropdown) {
+            return;
+        }
+
+        const thresholdState = getStudentSearchThresholdState(input.value);
+        state.studentSearchQuery = thresholdState.query;
+
+        if (!document.getElementById('classSelect').value || !thresholdState.meetsThreshold) {
+            state.studentSearchResults = [];
+            hideStudentSearchDropdown();
+            return;
+        }
+
+        const matches = filterPreviewStudents(thresholdState.query);
+        state.studentSearchResults = matches;
+        dropdown.innerHTML = matches.length
+            ? matches.map((student) => {
+                const isSelected = String(student.id) === String(state.selectedPreviewStudentId || '');
+                return `<button type="button" class="student-search-item${isSelected ? ' is-active' : ''}" onmousedown="selectPreviewStudentById('${escapeHtml(String(student.id))}'); return false;">
+                    <span class="student-search-name">${escapeHtml(student.nama || 'Mahasiswa')}</span>
+                    <span class="student-search-meta">NIM: ${escapeHtml(student.nim || '-')} • ${escapeHtml(getStudentClassLabel(student))}</span>
+                </button>`;
+            }).join('')
+            : '<div class="student-search-item empty">Tidak ada mahasiswa yang cocok. Pilih dari dropdown atau kosongkan pencarian untuk generate semua mahasiswa.</div>';
+        dropdown.style.display = 'block';
+    }
+
+    window.renderStudentSearchDropdown = renderStudentSearchDropdown;
+
+    window.selectPreviewStudentById = function (studentId) {
+        const student = state.previewStudents.find((item) => String(item.id) === String(studentId));
+        const input = getStudentSearchInput();
+        const hidden = getSelectedStudentField();
+        if (!student || !input || !hidden) {
+            return;
+        }
+
+        state.selectedPreviewStudentId = String(student.id);
+        hidden.value = student.id;
+        input.value = getStudentLabel(student);
+        input.classList.add('is-selected');
+        setStudentPreviewPageForStudent(student.id);
+        setStudentSearchStatus(student);
+        hideStudentSearchDropdown();
+        renderStudentPreview(state.currentPreviewClass, state.previewStudents);
+        updatePreview();
+    };
+
+    window.handleStudentSearchInput = function () {
+        const input = getStudentSearchInput();
+        if (!input) {
+            return;
+        }
+
+        const selectedStudent = getSelectedPreviewStudent();
+        const currentValue = input.value.trim();
+        if (selectedStudent && currentValue !== getStudentLabel(selectedStudent)) {
+            clearSelectedPreviewStudent(true);
+        }
+
+        if (!currentValue) {
+            hideStudentSearchDropdown();
+            renderStudentPreview(state.currentPreviewClass, state.previewStudents);
+            updatePreview();
+            return;
+        }
+
+        window.renderStudentSearchDropdown();
+        renderStudentPreview(state.currentPreviewClass, state.previewStudents);
+        updatePreview();
+    };
+
+    window.handleStudentSearchFocus = function () {
+        const input = getStudentSearchInput();
+        const hiddenField = getSelectedStudentField();
+        if (!input || !input.value.trim() || (hiddenField && hiddenField.value)) {
+            return;
+        }
+
+        const thresholdState = getStudentSearchThresholdState(input.value);
+        if (thresholdState.meetsThreshold) {
+            window.renderStudentSearchDropdown();
+        }
+    };
+
+    window.handleStudentSearchBlur = function () {
+        window.setTimeout(() => {
+            hideStudentSearchDropdown();
+        }, 120);
+    };
+
     window.createScheduleRow = function (item = {}) {
         const row = document.createElement('tr');
         row.className = 'schedule-row';
@@ -159,11 +422,22 @@
         select.value = current;
     };
 
-    window.handleClassChange = function () {
+    window.handleClassChange = function (preservePendingSelection = false) {
         const classId = document.getElementById('classSelect').value;
+        const requestToken = ++state.classRequestToken;
         updateStudentSourceBadge();
         state.studentPreviewPage = 1;
+        state.currentPreviewClass = null;
+        if (!preservePendingSelection) {
+            state.pendingSelectedPreviewStudentId = '';
+            state.pendingSelectedPreviewStudentLabel = '';
+        }
+        clearSelectedPreviewStudent();
+        hideStudentSearchDropdown();
+        updateStudentSearchAvailability();
         if (!classId) {
+            state.pendingSelectedPreviewStudentId = '';
+            state.pendingSelectedPreviewStudentLabel = '';
             state.previewStudents = [];
             renderStudentPreview(null, []);
             updatePreview();
@@ -172,14 +446,24 @@
         fetch('index.php?api=master_data&action=list_students_by_class&class_id=' + encodeURIComponent(classId))
             .then((r) => r.json())
             .then((res) => {
+                if (requestToken !== state.classRequestToken || String(document.getElementById('classSelect').value) !== String(classId)) {
+                    return;
+                }
                 if (!res.success) {
                     throw new Error(res.message || 'Gagal memuat mahasiswa kelas');
                 }
                 state.previewStudents = res.data || [];
-                renderStudentPreview(res.class || null, state.previewStudents);
+                state.currentPreviewClass = res.class || null;
+                applyPendingSelectedPreviewStudent();
+                renderStudentPreview(state.currentPreviewClass, state.previewStudents);
                 updatePreview();
             })
-            .catch((error) => showToast(error.message, 'error'));
+            .catch((error) => {
+                if (requestToken !== state.classRequestToken || String(document.getElementById('classSelect').value) !== String(classId)) {
+                    return;
+                }
+                showToast(error.message, 'error');
+            });
     };
 
     window.renderStudentPreview = function (classInfo, students) {
@@ -187,15 +471,21 @@
         const prevButton = document.getElementById('studentPreviewPrev');
         const nextButton = document.getElementById('studentPreviewNext');
         const pageInfo = document.getElementById('studentPreviewPageInfo');
+        state.currentPreviewClass = classInfo || null;
+        updateStudentSearchAvailability();
         document.getElementById('selectedClassLabel').textContent = classInfo ? classInfo.name : 'Belum dipilih';
         document.getElementById('selectedClassCount').textContent = String(students.length || 0);
         if (!students.length) {
+            clearSelectedPreviewStudent();
+            hideStudentSearchDropdown();
             body.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#88939e;">Belum ada mahasiswa untuk ditampilkan.</td></tr>';
             prevButton.disabled = true;
             nextButton.disabled = true;
             pageInfo.textContent = 'Page 1 / 1';
             return;
         }
+
+        syncSelectedPreviewStudent();
 
         const totalPages = Math.max(1, Math.ceil(students.length / state.studentPreviewPageSize));
         if (state.studentPreviewPage > totalPages) {
@@ -207,8 +497,9 @@
 
         const startIndex = (state.studentPreviewPage - 1) * state.studentPreviewPageSize;
         const visibleStudents = students.slice(startIndex, startIndex + state.studentPreviewPageSize);
+        const selectedStudentId = String(state.selectedPreviewStudentId || '');
 
-        body.innerHTML = visibleStudents.map((student) => `<tr><td>${escapeHtml(student.nim)}</td><td>${escapeHtml(student.nama)}</td></tr>`).join('');
+        body.innerHTML = visibleStudents.map((student) => `<tr class="${String(student.id) === selectedStudentId ? 'is-active' : ''}"><td>${escapeHtml(student.nim)}</td><td>${escapeHtml(student.nama)}</td></tr>`).join('');
         prevButton.disabled = state.studentPreviewPage <= 1;
         nextButton.disabled = state.studentPreviewPage >= totalPages;
         pageInfo.textContent = `Page ${state.studentPreviewPage} / ${totalPages}`;
@@ -253,11 +544,13 @@
         const previewClassName = document.getElementById('previewClassName');
         const previewStudentName = document.getElementById('previewStudentName');
         const previewStudentNim = document.getElementById('previewStudentNim');
-        const sampleStudent = state.previewStudents[0];
+        const sampleStudent = getSelectedPreviewStudent() || state.previewStudents[0];
 
         if (selectedClassId && sampleStudent) {
-            previewSource.textContent = '[Preview mahasiswa dari master data]';
-            previewClassName.textContent = sampleStudent.tingkat || '-';
+            previewSource.textContent = getSelectedPreviewStudent()
+                ? '[Preview mahasiswa terpilih dari master data]'
+                : '[Preview mahasiswa dari master data]';
+            previewClassName.textContent = getStudentClassLabel(sampleStudent);
             previewStudentName.textContent = sampleStudent.nama || 'CONTOH MAHASISWA';
             previewStudentNim.textContent = sampleStudent.nim || '12345678';
         } else if (document.getElementById('student_csv').files.length > 0) {
@@ -290,4 +583,7 @@
             tbody.appendChild(tr);
         }
     };
+
+    updateStudentSearchAvailability();
+    setStudentSearchStatus(null);
 })();

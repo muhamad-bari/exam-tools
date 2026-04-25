@@ -93,6 +93,16 @@
                 <p class="form-hint">Pilih kelas yang sudah dikelola di menu `Master Data`. Jika belum tersedia, Anda masih bisa menggunakan CSV fallback.</p>
                 <div class="info-row"><span>Kelas aktif</span><strong id="selectedClassLabel">Belum dipilih</strong></div>
                 <div class="info-row" style="margin-top:6px;"><span>Mahasiswa aktif</span><strong id="selectedClassCount">0</strong></div>
+                <div class="form-group student-search-group">
+                    <label class="form-label" for="studentSearchInput">Cari Mahasiswa Spesifik</label>
+                    <input type="hidden" name="selected_student_id" id="selectedStudentId">
+                    <div class="student-search-wrap">
+                        <input type="text" id="studentSearchInput" class="form-control" placeholder="Pilih kelas master terlebih dahulu" autocomplete="off" disabled oninput="handleStudentSearchInput()" onfocus="handleStudentSearchFocus()" onblur="handleStudentSearchBlur()">
+                        <div class="student-search-dropdown" id="studentSearchDropdown"></div>
+                    </div>
+                    <div class="student-search-selected" id="studentSearchStatus">Kosongkan pencarian untuk tetap generate semua mahasiswa di kelas aktif.</div>
+                    <p class="form-hint">Ketik minimal 3 huruf nama atau 3 digit NIM, lalu pilih satu mahasiswa dari dropdown jika ingin mencetak jadwal mahasiswa tertentu saja.</p>
+                </div>
                 <div class="student-preview-list" id="studentPreviewWrap">
                     <table>
                         <thead><tr><th>NIM</th><th>Nama</th></tr></thead>
