@@ -111,6 +111,8 @@ function initializeDatabaseSchema(PDO $db)
     ensureColumnExists($db, 'grade_recap_imports', 'academic_year', 'TEXT DEFAULT NULL');
     ensureColumnExists($db, 'grade_recap_imports', 'term', 'TEXT DEFAULT NULL');
 
+    repairMasterSubjectEncoding($db);
+
     $db->exec("CREATE TABLE IF NOT EXISTS grade_recap_results (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         import_id INTEGER NOT NULL,
@@ -258,7 +260,51 @@ function normalizeRootId($value)
 
 function sanitizeMasterName($value)
 {
-    return preg_replace('/\s+/', ' ', trim((string) $value));
+    $value = normalizeUtf8Text((string) $value);
+    return preg_replace('/\s+/', ' ', trim($value));
+}
+
+function normalizeUtf8Text(string $value): string
+{
+    if ($value === '') {
+        return '';
+    }
+
+    if (!mb_check_encoding($value, 'UTF-8')) {
+        $value = mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+    }
+
+    $value = str_replace("\u{2026}", '...', $value);
+
+    return preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $value) ?? '';
+}
+
+function repairMasterSubjectEncoding(PDO $db): void
+{
+    $rows = $db->query('SELECT id, name FROM master_subjects ORDER BY id ASC')->fetchAll();
+    if (!$rows) {
+        return;
+    }
+
+    $updateStmt = $db->prepare('UPDATE master_subjects SET name = :name, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+
+    foreach ($rows as $row) {
+        $currentName = (string) ($row['name'] ?? '');
+        $normalizedName = sanitizeMasterName($currentName);
+        if ($normalizedName === '' || $normalizedName === $currentName) {
+            continue;
+        }
+
+        $existingSubject = findSubjectByName($db, $normalizedName);
+        if ($existingSubject && (int) $existingSubject['id'] !== (int) $row['id']) {
+            continue;
+        }
+
+        $updateStmt->execute([
+            ':id' => (int) $row['id'],
+            ':name' => $normalizedName,
+        ]);
+    }
 }
 
 function normalizeClassCode($value)
@@ -600,7 +646,7 @@ function findSubjectByName(PDO $db, $subjectName)
 
     return [
         'id' => (int) $subject['id'],
-        'name' => $subject['name'],
+        'name' => sanitizeMasterName($subject['name'] ?? ''),
     ];
 }
 
@@ -661,8 +707,8 @@ function getAcademicPeriods(PDO $db)
     $rows = $db->query('SELECT id, academic_year, term FROM master_academic_periods ORDER BY academic_year DESC, CASE term WHEN "GANJIL" THEN 1 WHEN "GENAP" THEN 2 ELSE 3 END ASC, id DESC')->fetchAll();
     foreach ($rows as &$row) {
         $row['id'] = (int) $row['id'];
-        $row['academic_year'] = (string) ($row['academic_year'] ?? '');
-        $row['term'] = (string) ($row['term'] ?? '');
+        $row['academic_year'] = sanitizeMasterName($row['academic_year'] ?? '');
+        $row['term'] = sanitizeMasterName($row['term'] ?? '');
     }
     unset($row);
 

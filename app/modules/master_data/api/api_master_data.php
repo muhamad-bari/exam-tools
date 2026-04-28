@@ -3,10 +3,18 @@ require_once __DIR__ . '/../../../bootstrap.php';
 app_require_router_request(true);
 
 header('Content-Type: application/json; charset=utf-8');
+ini_set('display_errors', '0');
 
-require_once PROJECT_ROOT . '/app/shared/lib/database.php';
+set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+    if (!(error_reporting() & $severity)) {
+        return false;
+    }
+
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
 
 try {
+    require_once PROJECT_ROOT . '/app/shared/lib/database.php';
     $db = getDatabaseConnection();
     $action = $_GET['action'] ?? '';
 
@@ -14,19 +22,19 @@ try {
         $classes = getClassesWithCounts($db);
         $subjects = getSubjects($db);
         $academicPeriods = getAcademicPeriods($db);
-        echo json_encode(['success' => true, 'classes' => $classes, 'subjects' => $subjects, 'academic_periods' => $academicPeriods]);
+        sendJson(['success' => true, 'classes' => $classes, 'subjects' => $subjects, 'academic_periods' => $academicPeriods]);
         exit;
     }
 
     if ($action === 'list_classes') {
-        echo json_encode(['success' => true, 'data' => getClassesWithCounts($db)]);
+        sendJson(['success' => true, 'data' => getClassesWithCounts($db)]);
         exit;
     }
 
     if ($action === 'list_students_by_class') {
         $classId = intval($_GET['class_id'] ?? 0);
         $result = loadStudentsByClassId($db, $classId);
-        echo json_encode([
+        sendJson([
             'success' => true,
             'class' => $result['class'],
             'data' => $result['students'],
@@ -35,12 +43,12 @@ try {
     }
 
     if ($action === 'list_subjects') {
-        echo json_encode(['success' => true, 'data' => getSubjects($db)]);
+        sendJson(['success' => true, 'data' => getSubjects($db)]);
         exit;
     }
 
     if ($action === 'list_academic_periods') {
-        echo json_encode(['success' => true, 'data' => getAcademicPeriods($db)]);
+        sendJson(['success' => true, 'data' => getAcademicPeriods($db)]);
         exit;
     }
 
@@ -49,7 +57,7 @@ try {
         $input = readJsonInput();
         $subject = getOrCreateSubject($db, $input['name'] ?? '');
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Mata kuliah berhasil disimpan',
             'data' => $subject,
@@ -62,7 +70,7 @@ try {
         $input = readJsonInput();
         $academicPeriod = getOrCreateAcademicPeriod($db, $input['academic_year'] ?? '', $input['term'] ?? '');
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Periode akademik berhasil disimpan',
             'data' => $academicPeriod,
@@ -82,7 +90,7 @@ try {
 
         $class = getOrCreateClass($db, $name, $code === '' ? null : $code);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Kelas berhasil ditambahkan',
             'data' => $class,
@@ -122,7 +130,7 @@ try {
             ':student_status' => $studentStatus,
         ]);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Mahasiswa berhasil ditambahkan',
             'data' => [
@@ -163,7 +171,7 @@ try {
             throw $e;
         }
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Naik kelas selesai',
             'data' => [
@@ -219,7 +227,7 @@ try {
             throw $e;
         }
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Naik kelas semua selesai',
             'data' => [
@@ -274,7 +282,7 @@ try {
             ':id' => $student['id'],
         ]);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Mahasiswa berhasil diperbarui',
             'data' => [
@@ -302,7 +310,7 @@ try {
         $deleteStmt = $db->prepare('DELETE FROM master_students WHERE id = :id');
         $deleteStmt->execute([':id' => $student['id']]);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Mahasiswa berhasil dihapus',
             'data' => $student,
@@ -327,7 +335,7 @@ try {
 
         $class = updateClass($db, $classId, $name, $code);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Kelas berhasil diperbarui',
             'data' => $class,
@@ -365,7 +373,7 @@ try {
             throw $e;
         }
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Kelas berhasil dihapus',
             'data' => $class,
@@ -385,9 +393,9 @@ try {
             throw new RuntimeException('Gagal membaca file CSV kelas');
         }
 
-        fgetcsv($handle, 10000, ',');
+        fgetcsv($handle, 10000, ',', '"', '\\');
         $created = 0;
-        while (($row = fgetcsv($handle, 10000, ',')) !== false) {
+        while (($row = fgetcsv($handle, 10000, ',', '"', '\\')) !== false) {
             $classCode = sanitizeMasterName($row[0] ?? '');
             $className = sanitizeMasterName($row[1] ?? $row[0] ?? '');
             if ($className === '') {
@@ -401,7 +409,7 @@ try {
         }
         fclose($handle);
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Import kelas selesai',
             'stats' => ['created_classes' => $created],
@@ -482,7 +490,7 @@ try {
             throw $e;
         }
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Import mahasiswa selesai',
             'stats' => [
@@ -514,9 +522,9 @@ try {
                 continue;
             }
 
-            fgetcsv($handle, 10000, ',');
+            fgetcsv($handle, 10000, ',', '"', '\\');
             $fileCreated = 0;
-            while (($row = fgetcsv($handle, 10000, ',')) !== false) {
+            while (($row = fgetcsv($handle, 10000, ',', '"', '\\')) !== false) {
                 $name = sanitizeMasterName($row[0] ?? $row[1] ?? '');
                 if ($name === '') {
                     continue;
@@ -543,7 +551,7 @@ try {
             throw new RuntimeException('Tidak ada file CSV mata kuliah yang valid');
         }
 
-        echo json_encode([
+        sendJson([
             'success' => true,
             'message' => 'Import mata kuliah selesai',
             'stats' => ['processed_files' => $processedFiles, 'created_subjects' => $created, 'skipped_duplicates' => $skippedDuplicates],
@@ -554,10 +562,12 @@ try {
     throw new RuntimeException('Invalid action');
 } catch (Throwable $e) {
     http_response_code(400);
-    echo json_encode([
+    sendJson([
         'success' => false,
         'message' => $e->getMessage(),
     ]);
+} finally {
+    restore_error_handler();
 }
 
 function getClassesWithCounts(PDO $db)
@@ -575,11 +585,22 @@ function getClassesWithCounts(PDO $db)
     return $rows;
 }
 
+function sendJson(array $payload): void
+{
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        throw new RuntimeException('Gagal membuat response JSON: ' . json_last_error_msg());
+    }
+
+    echo $json;
+}
+
 function getSubjects(PDO $db)
 {
     $rows = $db->query('SELECT id, name FROM master_subjects ORDER BY name ASC')->fetchAll();
     foreach ($rows as &$row) {
         $row['id'] = (int) $row['id'];
+        $row['name'] = sanitizeMasterName($row['name'] ?? '');
     }
     unset($row);
     return $rows;

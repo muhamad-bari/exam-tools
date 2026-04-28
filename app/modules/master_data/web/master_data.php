@@ -1095,7 +1095,7 @@ app_require_router_request();
                         throw new Error(res.message || 'Import mata kuliah gagal');
                     }
 
-                    document.getElementById('subjectsInfo').textContent = `Import ${res.stats.processed_files} file selesai: +${res.stats.created_subjects} mata kuliah baru`;
+                    document.getElementById('subjectsInfo').textContent = `Import ${res.stats.processed_files} file selesai: +${res.stats.created_subjects} mata kuliah baru, ${res.stats.skipped_duplicates || 0} duplikat dilewati`;
                     input.value = '';
                     return loadOverview(true).then(() => showToast(res.message));
                 })
