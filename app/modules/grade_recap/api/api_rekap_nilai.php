@@ -770,6 +770,8 @@ function buildRecapRowsFromSheetRows(array $rows, array $studentLookup)
         applyCategoryScore($record, $category, $score, $bsText);
     }
 
+    unset($record);
+
     $rowsByNim = [];
     foreach ($aggregatedByNim as $record) {
         $nim = (string) ($record['nim'] ?? '');
@@ -1258,17 +1260,34 @@ function getClassRecapPivotData(PDO $db, $className, array $filters = [])
     $scoreRows = $scoreStmt->fetchAll();
 
     $byNim = [];
-    foreach ($scoreRows as $row) {
+    $rosterSql = 'SELECT s.nim,
+                         s.name AS student_name
+                    FROM master_students s
+                    INNER JOIN master_classes c ON c.id = s.class_id
+                   WHERE c.name = :class_name
+                     AND s.is_active = 1
+                     AND LOWER(REPLACE(TRIM(COALESCE(s.student_status, "aktif")), " ", "_")) NOT IN ("cuti", "keluar", "mengundurkan_diri")
+                   ORDER BY s.name ASC, s.nim ASC';
+    $rosterStmt = $db->prepare($rosterSql);
+    $rosterStmt->execute([':class_name' => $className]);
+
+    foreach ($rosterStmt->fetchAll() as $row) {
         $nim = (string) ($row['nim'] ?? '');
         if ($nim === '') {
             continue;
         }
-        if (!isset($byNim[$nim])) {
-            $byNim[$nim] = [
-                'nim' => $nim,
-                'name' => (string) ($row['student_name'] ?? ''),
-                'subjects' => [],
-            ];
+
+        $byNim[$nim] = [
+            'nim' => $nim,
+            'name' => (string) ($row['student_name'] ?? ''),
+            'subjects' => [],
+        ];
+    }
+
+    foreach ($scoreRows as $row) {
+        $nim = (string) ($row['nim'] ?? '');
+        if ($nim === '' || !isset($byNim[$nim])) {
+            continue;
         }
         $subjectKey = (int) ($row['subject_id'] ?? 0) . ':' . (string) ($row['exam_type'] ?? 'UAS') . ':' . (string) ($row['academic_year'] ?? '') . ':' . (string) ($row['term'] ?? '');
         $byNim[$nim]['subjects'][$subjectKey] = [
