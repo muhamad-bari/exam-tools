@@ -6,15 +6,21 @@
         </div>
         <div>
             <label for="subjectSearchInput" class="muted" style="display:block; margin-bottom:8px; font-weight:600;">Mata Kuliah (wajib)</label>
-            <input
-                type="text"
-                id="subjectSearchInput"
-                list="subjectSearchList"
-                placeholder="Cari mata kuliah..."
-                autocomplete="off"
-                style="width:100%; border:1px solid #cfd8e3; border-radius:10px; padding:10px 12px; background:#fff;"
-            >
-            <datalist id="subjectSearchList"></datalist>
+            <div class="subject-search-wrap" id="subjectSearchWrap">
+                <input
+                    type="text"
+                    id="subjectSearchInput"
+                    list="subjectSearchList"
+                    placeholder="Cari mata kuliah..."
+                    autocomplete="off"
+                    style="width:100%; border:1px solid #cfd8e3; border-radius:10px; padding:10px 12px; background:#fff;"
+                    aria-autocomplete="list"
+                    aria-controls="subjectSearchSuggestions"
+                    aria-expanded="false"
+                >
+                <div id="subjectSearchSuggestions" class="subject-suggestions" role="listbox"></div>
+                <datalist id="subjectSearchList"></datalist>
+            </div>
             <select id="subjectSelect" style="display:none;" aria-hidden="true" tabindex="-1">
                 <option value="">-- Pilih mata kuliah --</option>
             </select>

@@ -364,14 +364,17 @@ function getRemedialFollowUpItems(PDO $db, array $filters)
                    COALESCE(r.academic_year, "") AS academic_year,
                    COALESCE(r.term, "") AS term,
                    r.import_id AS source_import_id,
-                   r.normal_score,
-                   r.normal_letter,
-                   r.final_score,
-                   r.final_letter,
-                   status_row.id AS status_id,
+                    r.normal_score,
+                    r.normal_letter,
+                    r.remedial_score AS uploaded_follow_up_score,
+                    r.remedial_letter AS uploaded_follow_up_letter,
+                    r.final_score,
+                    r.final_letter,
+                    r.updated_at AS recap_updated_at,
+                    status_row.id AS status_id,
                    status_row.status,
                    status_row.follow_up_date,
-                   status_row.follow_up_score,
+                    status_row.follow_up_score,
                    status_row.notes,
                    status_row.updated_at AS status_updated_at,
                    status_row.class_name_snapshot,
@@ -456,8 +459,13 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
                    scoped.exam_type,
                    scoped.academic_year,
                    scoped.term,
-                   scoped.latest_import_id AS source_import_id,
-                   status_row.id AS status_id,
+                    scoped.latest_import_id AS source_import_id,
+                    r.susulan_score AS uploaded_follow_up_score,
+                    r.susulan_letter AS uploaded_follow_up_letter,
+                    r.final_score,
+                    r.final_letter,
+                    r.updated_at AS recap_updated_at,
+                    status_row.id AS status_id,
                    status_row.status,
                    status_row.follow_up_date,
                    status_row.follow_up_score,
@@ -493,7 +501,7 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
                  AND status_row.academic_year = scoped.academic_year
                  AND status_row.term = scoped.term
                  AND status_row.follow_up_type = "susulan"
-             WHERE r.id IS NULL';
+             WHERE (r.id IS NULL OR r.susulan_score IS NOT NULL)';
 
     if (($filters['student_id'] ?? null) !== null) {
         $sql .= ' AND student.id = :student_id';
@@ -506,9 +514,20 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
 
     $items = [];
     foreach ($stmt->fetchAll() as $row) {
-        $items[] = mapFollowUpItemRow($row, 'susulan', [
+        $reason = [
             'reason_code' => 'missing_latest_recap',
             'reason_label' => 'Belum memiliki baris pada rekap terbaru',
+        ];
+        if (array_key_exists('uploaded_follow_up_score', $row) && $row['uploaded_follow_up_score'] !== null) {
+            $reason = [
+                'reason_code' => 'uploaded_susulan_score',
+                'reason_label' => 'Nilai susulan sudah diunggah',
+            ];
+        }
+
+        $items[] = mapFollowUpItemRow($row, 'susulan', [
+            'reason_code' => $reason['reason_code'],
+            'reason_label' => $reason['reason_label'],
         ]);
     }
 
@@ -517,13 +536,27 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
 
 function mapFollowUpItemRow(array $row, $followUpType, array $reason)
 {
+    $uploadedFollowUpScore = null;
+    if (array_key_exists('uploaded_follow_up_score', $row) && $row['uploaded_follow_up_score'] !== null) {
+        $uploadedFollowUpScore = (float) $row['uploaded_follow_up_score'];
+    }
+
+    $hasSavedStatus = isset($row['status_id']) && $row['status_id'] !== null;
+    $savedFollowUpScore = array_key_exists('follow_up_score', $row) && $row['follow_up_score'] !== null
+        ? (float) $row['follow_up_score']
+        : null;
+    $effectiveStatus = $hasSavedStatus ? (string) ($row['status'] ?? 'pending') : 'pending';
+    if ($uploadedFollowUpScore !== null && $savedFollowUpScore === null) {
+        $effectiveStatus = 'sudah mengikuti';
+    }
+
     $status = [
-        'id' => isset($row['status_id']) ? (int) $row['status_id'] : null,
-        'status' => (string) ($row['status'] ?? 'pending'),
+        'id' => $hasSavedStatus ? (int) $row['status_id'] : null,
+        'status' => $effectiveStatus,
         'follow_up_date' => $row['follow_up_date'] ?? null,
-        'follow_up_score' => $row['follow_up_score'] !== null ? (float) $row['follow_up_score'] : null,
+        'follow_up_score' => $savedFollowUpScore !== null ? $savedFollowUpScore : $uploadedFollowUpScore,
         'notes' => $row['notes'] ?? null,
-        'updated_at' => $row['status_updated_at'] ?? null,
+        'updated_at' => ($row['status_updated_at'] ?? null) ?: ($uploadedFollowUpScore !== null ? ($row['recap_updated_at'] ?? null) : null),
         'class_id' => isset($row['saved_class_id']) && $row['saved_class_id'] !== null ? (int) $row['saved_class_id'] : null,
         'class_name_snapshot' => $row['class_name_snapshot'] ?? null,
     ];

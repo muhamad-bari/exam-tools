@@ -1,6 +1,9 @@
 (function () {
     const state = window.scheduleState;
     const defaults = window.schedulePageConfig || {};
+    const fieldValueOrDefault = (data, key, fallback = '') => (
+        Object.prototype.hasOwnProperty.call(data, key) ? data[key] : fallback
+    );
 
     window.saveSession = function () {
         const name = document.getElementById('sessionNameInput').value.trim();
@@ -77,7 +80,7 @@
         document.getElementsByName('sub_title')[0].value = data.sub_title || defaults.defaultSubTitle || '';
         document.getElementsByName('signer_name')[0].value = data.signer_name || defaults.defaultSignerName || '';
         document.getElementsByName('signer_institution')[0].value = data.signer_institution || defaults.defaultSignerInstitution || '';
-        document.getElementsByName('signer_title')[0].value = data.signer_title || defaults.defaultSignerTitle || '';
+        document.getElementsByName('signer_title')[0].value = fieldValueOrDefault(data, 'signer_title', defaults.defaultSignerTitle || '');
         document.getElementsByName('signer_date')[0].value = data.signer_date || defaults.defaultSignerDate || '';
 
         if (data.logo_data) {

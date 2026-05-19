@@ -47,6 +47,139 @@ try {
         exit;
     }
 
+    if ($method === 'GET' && $action === 'list_class_subjects') {
+        header('Content-Type: application/json; charset=utf-8');
+        $db = getDatabaseConnection();
+        $className = sanitizeGradeCell($_GET['class_name'] ?? '');
+        if ($className === '') {
+            throw new RuntimeException('class_name wajib diisi');
+        }
+
+        $filters = getRecapFiltersFromArray($_GET, false);
+        $rows = getClassSubjectRecapList($db, $className, $filters);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Daftar mata kuliah kelas berhasil dimuat',
+            'meta' => [
+                'class_name' => $className,
+                'total_subjects' => count($rows),
+                'active_filters' => $filters,
+            ],
+            'data' => $rows,
+        ]);
+        exit;
+    }
+
+    if ($method === 'POST' && $action === 'update_class_subject') {
+        header('Content-Type: application/json; charset=utf-8');
+        $db = getDatabaseConnection();
+        $payload = readGradeRecapJsonPayload();
+        $scope = readClassSubjectScopePayload($payload);
+        $newSubjectId = intval($payload['new_subject_id'] ?? 0);
+        if ($newSubjectId <= 0) {
+            throw new RuntimeException('new_subject_id wajib diisi');
+        }
+
+        $subject = getSubjectById($db, $newSubjectId);
+        if ($newSubjectId === $scope['subject_id']) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Mata kuliah kelas tidak berubah',
+                'updated_rows' => 0,
+                'data' => [
+                    'subject' => $subject,
+                ],
+            ]);
+            exit;
+        }
+
+        $conflictStmt = $db->prepare('SELECT COUNT(*)
+                                        FROM grade_recap_results
+                                       WHERE class_name = :class_name
+                                         AND subject_id = :new_subject_id
+                                         AND COALESCE(exam_type, "UAS") = :exam_type
+                                         AND COALESCE(academic_year, "") = :academic_year
+                                         AND COALESCE(term, "") = :term');
+        $conflictStmt->execute([
+            ':class_name' => $scope['class_name'],
+            ':new_subject_id' => $newSubjectId,
+            ':exam_type' => $scope['exam_type'],
+            ':academic_year' => $scope['academic_year'],
+            ':term' => $scope['term'],
+        ]);
+        if ((int) $conflictStmt->fetchColumn() > 0) {
+            throw new RuntimeException('Mata kuliah pengganti sudah memiliki nilai pada kelas dan periode ini');
+        }
+
+        $db->beginTransaction();
+        $stmt = $db->prepare('UPDATE grade_recap_results
+                                SET subject_id = :new_subject_id,
+                                    updated_at = CURRENT_TIMESTAMP
+                              WHERE class_name = :class_name
+                                AND subject_id = :subject_id
+                                AND COALESCE(exam_type, "UAS") = :exam_type
+                                AND COALESCE(academic_year, "") = :academic_year
+                                AND COALESCE(term, "") = :term');
+        $stmt->execute([
+            ':new_subject_id' => $newSubjectId,
+            ':class_name' => $scope['class_name'],
+            ':subject_id' => $scope['subject_id'],
+            ':exam_type' => $scope['exam_type'],
+            ':academic_year' => $scope['academic_year'],
+            ':term' => $scope['term'],
+        ]);
+        $updated = $stmt->rowCount();
+        if ($updated <= 0) {
+            throw new RuntimeException('Data mata kuliah kelas tidak ditemukan');
+        }
+        $db->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Mata kuliah kelas berhasil diperbarui',
+            'updated_rows' => $updated,
+            'data' => [
+                'subject' => $subject,
+            ],
+        ]);
+        exit;
+    }
+
+    if ($method === 'POST' && $action === 'delete_class_subject_values') {
+        header('Content-Type: application/json; charset=utf-8');
+        $db = getDatabaseConnection();
+        $payload = readGradeRecapJsonPayload();
+        $scope = readClassSubjectScopePayload($payload);
+
+        $db->beginTransaction();
+        $stmt = $db->prepare('DELETE FROM grade_recap_results
+                              WHERE class_name = :class_name
+                                AND subject_id = :subject_id
+                                AND COALESCE(exam_type, "UAS") = :exam_type
+                                AND COALESCE(academic_year, "") = :academic_year
+                                AND COALESCE(term, "") = :term');
+        $stmt->execute([
+            ':class_name' => $scope['class_name'],
+            ':subject_id' => $scope['subject_id'],
+            ':exam_type' => $scope['exam_type'],
+            ':academic_year' => $scope['academic_year'],
+            ':term' => $scope['term'],
+        ]);
+        $deleted = $stmt->rowCount();
+        if ($deleted <= 0) {
+            throw new RuntimeException('Data mata kuliah kelas tidak ditemukan');
+        }
+        $db->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Nilai mata kuliah kelas berhasil dihapus',
+            'deleted_rows' => $deleted,
+        ]);
+        exit;
+    }
+
     if ($method === 'GET' && ($action === 'download_class_recap' || $action === 'export_class_recap_xlsx')) {
         $db = getDatabaseConnection();
         $className = sanitizeGradeCell($_GET['class_name'] ?? '');
@@ -316,6 +449,49 @@ try {
         'message' => $e->getMessage(),
     ]);
 }
+}
+
+
+function readGradeRecapJsonPayload()
+{
+    $payload = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($payload)) {
+        throw new RuntimeException('Payload tidak valid');
+    }
+
+    return $payload;
+}
+
+function readClassSubjectScopePayload(array $payload)
+{
+    $className = sanitizeGradeCell($payload['class_name'] ?? '');
+    if ($className === '') {
+        throw new RuntimeException('class_name wajib diisi');
+    }
+
+    $subjectId = intval($payload['subject_id'] ?? 0);
+    if ($subjectId <= 0) {
+        throw new RuntimeException('subject_id wajib diisi');
+    }
+
+    $filters = getRecapFiltersFromArray($payload, true);
+    if (($filters['exam_type'] ?? null) === null) {
+        throw new RuntimeException('exam_type wajib diisi');
+    }
+    if (($filters['academic_year'] ?? null) === null) {
+        throw new RuntimeException('academic_year wajib diisi');
+    }
+    if (($filters['term'] ?? null) === null) {
+        throw new RuntimeException('term wajib diisi');
+    }
+
+    return [
+        'class_name' => $className,
+        'subject_id' => $subjectId,
+        'exam_type' => $filters['exam_type'],
+        'academic_year' => $filters['academic_year'],
+        'term' => $filters['term'],
+    ];
 }
 
 function sanitizeGradeCell($value)
@@ -1050,6 +1226,72 @@ function getStoredClassRecapList(PDO $db, array $filters = [])
             'class_name' => $row['class_name'],
             'total_students' => (int) ($row['total_students'] ?? 0),
             'total_subjects' => (int) ($row['total_subjects'] ?? 0),
+            'avg_final' => $row['avg_final'] !== null ? (float) $row['avg_final'] : null,
+            'highest_final' => $row['highest_final'] !== null ? (float) $row['highest_final'] : null,
+            'lowest_final' => $row['lowest_final'] !== null ? (float) $row['lowest_final'] : null,
+            'last_import_at' => $row['last_import_at'] ?? null,
+        ];
+    }
+
+    return $rows;
+}
+
+
+function getClassSubjectRecapList(PDO $db, $className, array $filters = [])
+{
+    $latestSql = getLatestRecapScopeSql();
+    $params = [':class_name' => $className];
+    $conditions = buildRecapFilterConditions('r', $filters, $params);
+    $where = ['r.class_name = :class_name'];
+    $where = array_merge($where, $conditions);
+
+    $sql = 'SELECT r.subject_id,
+                   COALESCE(ms.name, "Mata kuliah #" || r.subject_id) AS subject_name,
+                   COALESCE(r.exam_type, "UAS") AS exam_type,
+                   COALESCE(r.academic_year, "") AS academic_year,
+                   COALESCE(r.term, "") AS term,
+                   COUNT(DISTINCT r.nim) AS total_students,
+                   ROUND(AVG(r.final_score), 2) AS avg_final,
+                   MAX(r.final_score) AS highest_final,
+                   MIN(r.final_score) AS lowest_final,
+                   MAX(i.created_at) AS last_import_at
+              FROM grade_recap_results r
+              INNER JOIN grade_recap_imports i ON i.id = r.import_id
+              INNER JOIN (' . $latestSql . ') latest ON latest.latest_import_id = r.import_id
+                 AND latest.subject_id = r.subject_id
+                 AND latest.exam_type = COALESCE(r.exam_type, "UAS")
+                 AND latest.academic_year_key = COALESCE(r.academic_year, "")
+                 AND latest.term_key = COALESCE(r.term, "")
+                 AND latest.class_name_key = COALESCE(r.class_name, "")
+              LEFT JOIN master_subjects ms ON ms.id = r.subject_id
+             WHERE ' . implode(' AND ', $where) . '
+             GROUP BY r.subject_id, COALESCE(r.exam_type, "UAS"), COALESCE(r.academic_year, ""), COALESCE(r.term, "")
+             ORDER BY subject_name ASC, academic_year ASC, term ASC, exam_type ASC';
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+
+    $rows = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $periodBits = [];
+        if (($row['exam_type'] ?? '') !== '') {
+            $periodBits[] = (string) $row['exam_type'];
+        }
+        if (($row['term'] ?? '') !== '') {
+            $periodBits[] = (string) $row['term'];
+        }
+        if (($row['academic_year'] ?? '') !== '') {
+            $periodBits[] = (string) $row['academic_year'];
+        }
+
+        $rows[] = [
+            'subject_id' => (int) ($row['subject_id'] ?? 0),
+            'subject_name' => (string) ($row['subject_name'] ?? ''),
+            'exam_type' => (string) ($row['exam_type'] ?? 'UAS'),
+            'academic_year' => (string) ($row['academic_year'] ?? ''),
+            'term' => (string) ($row['term'] ?? ''),
+            'label' => (string) ($row['subject_name'] ?? '') . ($periodBits ? ' (' . implode(' - ', $periodBits) . ')' : ''),
+            'total_students' => (int) ($row['total_students'] ?? 0),
             'avg_final' => $row['avg_final'] !== null ? (float) $row['avg_final'] : null,
             'highest_final' => $row['highest_final'] !== null ? (float) $row['highest_final'] : null,
             'lowest_final' => $row['lowest_final'] !== null ? (float) $row['lowest_final'] : null,

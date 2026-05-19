@@ -18,6 +18,9 @@ let storedFilters = {
     academicYear: null,
     term: null,
 };
+let classSubjectRows = [];
+let currentClassSubjectModalClassName = null;
+let classSubjectEditState = null;
 
 function syncSelectedSubjectFromDom() {
     const searchInput = document.getElementById('subjectSearchInput');

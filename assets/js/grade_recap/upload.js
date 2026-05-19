@@ -32,7 +32,9 @@ function loadSubjectOptions() {
 
             if (searchInput) {
                 const selectedId = String(select.value || '');
-                const selectedOption = Array.from(select.options).find((option) => String(option.value) === selectedId);
+                const selectedOption = selectedId
+                    ? Array.from(select.options).find((option) => String(option.value) === selectedId)
+                    : null;
                 searchInput.value = selectedOption ? selectedOption.textContent : '';
             }
         });

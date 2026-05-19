@@ -25,6 +25,12 @@ app_require_router_request();
         .drop strong { display: grid; gap: 10px; justify-items: center; width: 100%; min-width: 0; }
         .drop strong span { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
         .drop i { font-size: 2rem; color: #2563eb; }
+        .subject-search-wrap { position: relative; }
+        .subject-suggestions { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; display: none; max-height: 240px; overflow: auto; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16); }
+        .subject-suggestions.open { display: block; }
+        .subject-suggestion { width: 100%; border: 0; border-bottom: 1px solid #edf2f7; background: #fff; color: #1f2937; cursor: pointer; padding: 10px 12px; text-align: left; }
+        .subject-suggestion:last-child { border-bottom: 0; }
+        .subject-suggestion:hover, .subject-suggestion.active { background: #eff6ff; color: #1d4ed8; }
         .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 10px 14px; color: #fff; text-decoration: none; cursor: pointer; font-weight: 600; }
         .btn.primary { background: #2563eb; }
         .btn.gray { background: #64748b; }
@@ -55,6 +61,13 @@ app_require_router_request();
         .content-section { display: none; }
         .content-section.active { display: block; }
         .class-list-table td:last-child { width: 1%; white-space: nowrap; }
+        .btn.icon-btn { width: 34px; height: 34px; flex: 0 0 34px; padding: 0; }
+        .class-subjects-modal-card { width: min(1040px, 100%); }
+        .class-subject-edit-panel { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-4); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-muted); }
+        .class-subject-edit-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
+        .class-subject-edit-input { width: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--surface-color); color: var(--text-color); }
+        .class-subject-edit-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        @media (max-width: 780px) { .class-subject-edit-grid { grid-template-columns: 1fr; } }
         .inline-link { border: none; background: transparent; color: #2563eb; cursor: pointer; padding: 0; font-weight: 600; }
         .inline-link:hover { text-decoration: underline; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px; }
@@ -91,12 +104,13 @@ app_require_router_request();
         </div>
     </div>
     <?php require __DIR__ . '/partials/assign_modal.php'; ?>
+    <?php require __DIR__ . '/partials/class_subjects_modal.php'; ?>
     <script src="assets/js/shared/utils.js"></script>
-    <script src="assets/js/grade_recap/state.js"></script>
-    <script src="assets/js/grade_recap/table.js"></script>
-    <script src="assets/js/grade_recap/stored.js"></script>
-    <script src="assets/js/grade_recap/assign.js"></script>
-    <script src="assets/js/grade_recap/upload.js"></script>
-    <script src="assets/js/grade_recap/bootstrap.js"></script>
+    <script src="assets/js/grade_recap/state.js?v=20260519-info-actions"></script>
+    <script src="assets/js/grade_recap/table.js?v=20260519-subject-search"></script>
+    <script src="assets/js/grade_recap/stored.js?v=20260519-info-actions"></script>
+    <script src="assets/js/grade_recap/assign.js?v=20260519-subject-search"></script>
+    <script src="assets/js/grade_recap/upload.js?v=20260519-subject-search"></script>
+    <script src="assets/js/grade_recap/bootstrap.js?v=20260519-info-actions"></script>
 </body>
 </html>

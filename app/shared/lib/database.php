@@ -785,9 +785,15 @@ function parseStudentCsvFile($filePath)
     }
 
     $students = [];
-    fgetcsv($handle, 10000, ',');
+    $firstLine = fgets($handle);
+    if ($firstLine === false) {
+        fclose($handle);
+        return $students;
+    }
 
-    while (($row = fgetcsv($handle, 10000, ',')) !== false) {
+    $delimiter = detectCsvDelimiter($firstLine);
+
+    while (($row = fgetcsv($handle, 10000, $delimiter, '"', '\\')) !== false) {
         if (!is_array($row) || count($row) < 3) {
             continue;
         }
@@ -807,6 +813,11 @@ function parseStudentCsvFile($filePath)
 
     fclose($handle);
     return $students;
+}
+
+function detectCsvDelimiter(string $headerLine): string
+{
+    return substr_count($headerLine, ';') > substr_count($headerLine, ',') ? ';' : ',';
 }
 
 function loadStudentsByClassId(PDO $db, $classId)
