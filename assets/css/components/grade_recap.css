@@ -27,3 +27,10 @@
     padding: 6px 10px;
     font-size: 0.8rem;
 }
+
+.flex-row-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+}
