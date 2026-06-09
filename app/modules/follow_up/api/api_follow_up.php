@@ -370,6 +370,7 @@ function getRemedialFollowUpItems(PDO $db, array $filters)
                     r.remedial_letter AS uploaded_follow_up_letter,
                     r.final_score,
                     r.final_letter,
+                    import_row.created_at AS import_created_at,
                     r.updated_at AS recap_updated_at,
                     status_row.id AS status_id,
                    status_row.status,
@@ -387,6 +388,7 @@ function getRemedialFollowUpItems(PDO $db, array $filters)
                  AND latest.term_key = COALESCE(r.term, "")
                  AND latest.class_name_key = COALESCE(r.class_name, "")
               INNER JOIN master_subjects subject ON subject.id = r.subject_id
+              INNER JOIN grade_recap_imports import_row ON import_row.id = r.import_id
               LEFT JOIN master_students ms ON ms.id = r.student_id
               LEFT JOIN master_classes current_class ON current_class.id = ms.class_id
               LEFT JOIN master_classes recap_class ON recap_class.name = r.class_name
@@ -462,9 +464,10 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
                     scoped.latest_import_id AS source_import_id,
                     r.susulan_score AS uploaded_follow_up_score,
                     r.susulan_letter AS uploaded_follow_up_letter,
-                    r.final_score,
-                    r.final_letter,
-                    r.updated_at AS recap_updated_at,
+                     r.final_score,
+                     r.final_letter,
+                     import_row.created_at AS import_created_at,
+                     r.updated_at AS recap_updated_at,
                     status_row.id AS status_id,
                    status_row.status,
                    status_row.follow_up_date,
@@ -487,8 +490,9 @@ function getSusulanFollowUpItems(PDO $db, array $filters)
                    ) scoped
               INNER JOIN master_classes class ON class.id = scoped.class_id
               INNER JOIN master_students student ON student.class_id = class.id AND student.is_active = 1
-              INNER JOIN master_subjects subject ON subject.id = scoped.subject_id
-              LEFT JOIN grade_recap_results r ON r.import_id = scoped.latest_import_id
+               INNER JOIN master_subjects subject ON subject.id = scoped.subject_id
+               INNER JOIN grade_recap_imports import_row ON import_row.id = scoped.latest_import_id
+               LEFT JOIN grade_recap_results r ON r.import_id = scoped.latest_import_id
                  AND r.subject_id = scoped.subject_id
                  AND COALESCE(r.exam_type, "UAS") = scoped.exam_type
                  AND COALESCE(r.academic_year, "") = scoped.academic_year
@@ -545,6 +549,7 @@ function mapFollowUpItemRow(array $row, $followUpType, array $reason)
     $savedFollowUpScore = array_key_exists('follow_up_score', $row) && $row['follow_up_score'] !== null
         ? (float) $row['follow_up_score']
         : null;
+    $importFollowUpDate = extractDateFromTimestamp($row['import_created_at'] ?? null);
     $effectiveStatus = $hasSavedStatus ? (string) ($row['status'] ?? 'pending') : 'pending';
     if ($uploadedFollowUpScore !== null && $savedFollowUpScore === null) {
         $effectiveStatus = 'sudah mengikuti';
@@ -553,10 +558,10 @@ function mapFollowUpItemRow(array $row, $followUpType, array $reason)
     $status = [
         'id' => $hasSavedStatus ? (int) $row['status_id'] : null,
         'status' => $effectiveStatus,
-        'follow_up_date' => $row['follow_up_date'] ?? null,
+        'follow_up_date' => ($row['follow_up_date'] ?? null) ?: ($uploadedFollowUpScore !== null ? $importFollowUpDate : null),
         'follow_up_score' => $savedFollowUpScore !== null ? $savedFollowUpScore : $uploadedFollowUpScore,
         'notes' => $row['notes'] ?? null,
-        'updated_at' => ($row['status_updated_at'] ?? null) ?: ($uploadedFollowUpScore !== null ? ($row['recap_updated_at'] ?? null) : null),
+        'updated_at' => ($row['status_updated_at'] ?? null) ?: ($uploadedFollowUpScore !== null ? (($row['import_created_at'] ?? null) ?: ($row['recap_updated_at'] ?? null)) : null),
         'class_id' => isset($row['saved_class_id']) && $row['saved_class_id'] !== null ? (int) $row['saved_class_id'] : null,
         'class_name_snapshot' => $row['class_name_snapshot'] ?? null,
     ];
@@ -590,6 +595,24 @@ function mapFollowUpItemRow(array $row, $followUpType, array $reason)
             'follow_up_type' => $followUpType,
         ]),
     ];
+}
+
+function extractDateFromTimestamp($value)
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $value = trim((string) $value);
+    if ($value === '') {
+        return null;
+    }
+
+    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1) {
+        return substr($value, 0, 10);
+    }
+
+    return null;
 }
 
 function buildFollowUpScopeKey(array $item)

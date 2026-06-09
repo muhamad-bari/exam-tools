@@ -1500,6 +1500,7 @@ function getClassRecapPivotData(PDO $db, $className, array $filters = [])
     $scoreStmt = $db->prepare($scoreSql);
     $scoreStmt->execute($scoreParams);
     $scoreRows = $scoreStmt->fetchAll();
+    $followUpOverrides = getClassRecapFollowUpOverrides($db, $className, $filters);
 
     $byNim = [];
     $rosterSql = 'SELECT s.nim,
@@ -1541,6 +1542,31 @@ function getClassRecapPivotData(PDO $db, $className, array $filters = [])
         ];
     }
 
+    foreach ($followUpOverrides as $nim => $subjectOverrides) {
+        if (!isset($byNim[$nim])) {
+            continue;
+        }
+
+        foreach ($subjectOverrides as $subjectKey => $override) {
+            if (!isset($byNim[$nim]['subjects'][$subjectKey])) {
+                $byNim[$nim]['subjects'][$subjectKey] = [
+                    'bs' => null,
+                    'score' => null,
+                    'letter' => null,
+                    'sp_score' => null,
+                    'susulan_score' => null,
+                ];
+            }
+
+            if (array_key_exists('sp_score', $override) && $override['sp_score'] !== null) {
+                $byNim[$nim]['subjects'][$subjectKey]['sp_score'] = $override['sp_score'];
+            }
+            if (array_key_exists('susulan_score', $override) && $override['susulan_score'] !== null) {
+                $byNim[$nim]['subjects'][$subjectKey]['susulan_score'] = $override['susulan_score'];
+            }
+        }
+    }
+
     $rows = array_values($byNim);
     usort($rows, static function ($a, $b) {
         $nameCompare = strcmp(mb_strtolower($a['name']), mb_strtolower($b['name']));
@@ -1551,6 +1577,61 @@ function getClassRecapPivotData(PDO $db, $className, array $filters = [])
     });
 
     return ['subjects' => $subjects, 'rows' => $rows];
+}
+
+function getClassRecapFollowUpOverrides(PDO $db, $className, array $filters = [])
+{
+    $params = [':class_name' => $className];
+    $conditions = [
+        'c.name = :class_name',
+        's.is_active = 1',
+        'f.follow_up_score IS NOT NULL',
+    ];
+    $conditions = array_merge($conditions, buildRecapFilterConditions('f', $filters, $params));
+
+    $sql = 'SELECT s.nim,
+                   f.subject_id,
+                   COALESCE(f.exam_type, "UAS") AS exam_type,
+                   COALESCE(f.academic_year, "") AS academic_year,
+                   COALESCE(f.term, "") AS term,
+                   f.follow_up_type,
+                   f.follow_up_score
+              FROM follow_up_statuses f
+              INNER JOIN master_students s ON s.id = f.student_id
+              INNER JOIN master_classes c ON c.id = s.class_id
+             WHERE ' . implode(' AND ', $conditions);
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+
+    $overrides = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $nim = (string) ($row['nim'] ?? '');
+        $subjectId = (int) ($row['subject_id'] ?? 0);
+        if ($nim === '' || $subjectId <= 0 || $row['follow_up_score'] === null) {
+            continue;
+        }
+
+        $subjectKey = $subjectId . ':' . (string) ($row['exam_type'] ?? 'UAS') . ':' . (string) ($row['academic_year'] ?? '') . ':' . (string) ($row['term'] ?? '');
+        if (!isset($overrides[$nim][$subjectKey])) {
+            $overrides[$nim][$subjectKey] = [
+                'sp_score' => null,
+                'susulan_score' => null,
+            ];
+        }
+
+        $score = (float) $row['follow_up_score'];
+        if (($row['follow_up_type'] ?? '') === 'remedial') {
+            $overrides[$nim][$subjectKey]['sp_score'] = $score;
+            continue;
+        }
+
+        if (($row['follow_up_type'] ?? '') === 'susulan') {
+            $overrides[$nim][$subjectKey]['susulan_score'] = $score;
+        }
+    }
+
+    return $overrides;
 }
 
 function streamClassRecapPivotXlsx($className, array $subjects, array $rows)
